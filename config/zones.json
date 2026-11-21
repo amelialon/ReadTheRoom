@@ -1,11 +1,11 @@
 {
   "zones": [
-    {"id": "water", "label": "water glass",
+    {"id": "water", "label": "water bottle",
      "question": "Are you thirsty? Do you need water?",
      "message": "is thirsty and wants water"},
-    {"id": "remote", "label": "TV remote",
-     "question": "Do you want the TV on or changed?",
-     "message": "wants help with the TV"},
+    {"id": "snack", "label": "snack packet",
+     "question": "Are you hungry? Do you want a snack?",
+     "message": "is hungry and wants a snack"},
     {"id": "blanket", "label": "blanket",
      "question": "Do you want your blanket adjusted?",
      "message": "wants the blanket adjusted", "climate": true},
