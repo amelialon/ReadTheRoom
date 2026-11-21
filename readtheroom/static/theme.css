@@ -10,24 +10,28 @@
   --r-lg: 24px;
   --r-md: 16px;
 
-  --ground: #eceff2;
-  --ground-deep: #e3e7eb;
-  --shell: rgba(16, 24, 32, .05);
-  --edge: rgba(16, 24, 32, .06);
+  /* Palette: cream #FEFAF3, blush #F6E2E9, light sage #B8CFB3, sage #84A282. */
+  --ground: #fefaf3;
+  --ground-deep: #f4ede1;
+  --shell: rgba(70, 60, 45, .055);
+  --edge: rgba(70, 60, 45, .07);
   --plate: #ffffff;
-  --plate-soft: #f4f6f8;
-  --ink: #171c22;
-  --ink-2: #5d6975;
-  --ink-3: #98a3ad;
-  --accent: #d9622b;
-  --accent-ink: #fff4ee;
-  --accent-tint: rgba(217, 98, 43, .14);
-  --accent-wash: #fbeee7;
-  --danger: #c6362a;
-  --danger-wash: #fbebe9;
-  --shadow: 0 1px 2px rgba(16, 24, 32, .04), 0 24px 60px -24px rgba(16, 24, 32, .18);
-  --shadow-lift: 0 2px 4px rgba(16, 24, 32, .04), 0 40px 90px -30px rgba(16, 24, 32, .26);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, .9);
+  --plate-soft: #faf6ee;
+  --ink: #262a27;
+  --ink-2: #67706a;
+  --ink-3: #9ea69f;
+  --accent: #84a282;           /* marks, large labels, rings */
+  --accent-deep: #5e7a5e;      /* the same green where it has to be read as text */
+  --accent-light: #b8cfb3;     /* fills and tints */
+  --accent-ink: #ffffff;
+  --accent-tint: rgba(184, 207, 179, .45);
+  --accent-wash: #e9f0e6;
+  --blush: #f6e2e9;            /* something on its way to the nurse */
+  --danger: #b8463c;
+  --danger-wash: #f7e1e0;
+  --shadow: 0 1px 2px rgba(70, 60, 45, .04), 0 24px 60px -24px rgba(70, 60, 45, .2);
+  --shadow-lift: 0 2px 4px rgba(70, 60, 45, .04), 0 40px 90px -30px rgba(70, 60, 45, .28);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, .95);
 }
 
 * { box-sizing: border-box; }
@@ -70,6 +74,7 @@ body {
 }
 .tag .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ink-3); }
 .tag.good .dot { background: var(--accent); }
+.tag.good { color: var(--accent-deep); }
 .tag.bad { color: var(--danger); }
 .tag.bad .dot { background: var(--danger); }
 

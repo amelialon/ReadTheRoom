@@ -10,7 +10,7 @@
 <style>
   html, body { height: 100%; }
   body { overflow: hidden; position: relative;
-         background: radial-gradient(120% 90% at 50% 40%, #f3f5f7 0%, var(--ground) 55%, var(--ground-deep) 100%); }
+         background: radial-gradient(120% 90% at 50% 40%, #fffdf9 0%, var(--ground) 55%, var(--ground-deep) 100%); }
 
   /* Two answer plates float at the edges, the question floats between them. */
   .side { position: absolute; top: 7vh; bottom: 7vh; width: 22vw; }
@@ -22,9 +22,7 @@
   .side .label { position: relative; font-size: 6.4vw; font-weight: 700; letter-spacing: -.045em;
                  color: var(--ink-3); transition: color 500ms var(--ease), transform 500ms var(--ease); }
   body.prompt .label, body.menu .label { color: var(--ink); }
-  body.prompt #yes .label, body.menu #yes .label { color: var(--accent); }
   body.more #no .label, body.menu #no .label { font-size: 4.6vw; color: var(--ink-2); }
-  .side.target .core, main.target .core { box-shadow: var(--highlight), var(--shadow), 0 0 0 3px var(--accent); }
 
   main { position: absolute; left: 27vw; right: 27vw; top: 7vh; bottom: 7vh; display: grid; place-items: center; }
   main .core { width: 100%; max-width: 760px; padding: 5vh 4vw; display: flex; flex-direction: column;
@@ -40,6 +38,7 @@
   #sub { font-size: clamp(15px, 1.25vw, 20px); color: var(--ink-2); line-height: 1.45; max-width: 40ch; min-height: 1.4em; }
   #bar { width: 42%; height: 4px; border-radius: 2px; background: var(--ground-deep); overflow: hidden; visibility: hidden; }
   #bar div { height: 100%; width: 0; background: var(--accent); transition: width 100ms linear; }
+  .side.target .core, main.target .core { box-shadow: var(--highlight), var(--shadow), 0 0 0 3px var(--accent); }
 
   /* Up: a thin line that fills while the patient holds a look upward. Nothing to read there. */
   #moreTop { display: none; position: absolute; top: 0; left: 40%; right: 40%; height: 4px;
@@ -60,10 +59,11 @@
   #top { display: flex; align-items: center; gap: 9px; color: var(--ink-2); }
   #dot { width: 7px; height: 7px; border-radius: 999px; background: var(--danger); }
   #dot.ok { background: var(--accent); }
+  body.noface #island { background: var(--danger-wash); }
   #calls { display: contents; }
-  #calls div { padding: 8px 16px; border-radius: 999px; background: var(--accent-wash); color: var(--ink); font-weight: 600; }
+  #calls div { padding: 8px 16px; border-radius: 999px; background: var(--blush); color: var(--ink); font-weight: 600; }
   #calls div.escalated { background: var(--danger-wash); color: var(--danger); }
-  #calls div.acked { background: var(--plate-soft); color: var(--ink-2); font-weight: 500; }
+  #calls div.acked { background: var(--accent-wash); color: var(--accent-deep); font-weight: 600; }
 
   /* Up/down answers: YES across the top, NO across the bottom. */
   body.vertical .side { left: 6vw; right: 6vw; width: auto; height: 19vh; top: auto; bottom: auto; }
@@ -107,7 +107,7 @@ function fill(id, v) {
   f.style.height = vertical ? '' : (v * 100) + '%';
   f.style.width = vertical ? (v * 100) + '%' : '';
 }
-function mode(name) { document.body.className = (vertical ? 'vertical ' : '') + name; }
+function mode(name) { document.body.className = (vertical ? 'vertical ' : '') + name + (document.body.classList.contains('noface') ? ' noface' : ''); }
 function setHeadline(text) {
   if (text === lastHeadline) return;   // the same words never re-animate
   lastHeadline = text;
@@ -126,6 +126,7 @@ function render(s) {
   $('bar').style.visibility = 'hidden';
   let headline = '', sub = '', count = '', noText = 'NO', yesText = 'YES';
   const quick = st.gaze_mode === 'quick' && st.sides;
+  document.body.classList.toggle('noface', !st.face_ok);
   $('moreTop').querySelector('.fill').style.width = '0';
 
   if (cal.active) {
@@ -203,7 +204,7 @@ function render(s) {
   if (item !== lastItem) { if (item) chime(520); lastItem = item; }
 
   $('dot').className = st.face_ok ? 'ok' : '';
-  const bits = [st.face_ok ? 'Tracking' : 'Cannot see your face'];
+  const bits = [st.face_ok ? 'Tracking' : "Can't see you"];
   if (st.temp_c != null) bits.push(st.temp_c.toFixed(1) + ' °C');
   if (!st.nurse_screens) bits.push('Nurse station not connected');
   $('status').textContent = bits.join('    ');

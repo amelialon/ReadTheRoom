@@ -51,7 +51,7 @@
   .alert .body { margin-right: auto; display: flex; flex-direction: column; gap: 4px; }
   .alert .msg { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
   .alert .meta { font-size: 13px; color: var(--ink-2); }
-  .alert.pending { background: var(--accent-wash); }
+  .alert.pending { background: var(--blush); }
   .alert.escalated { background: var(--danger-wash); }
   .alert.escalated .meta { color: var(--danger); font-weight: 600; }
   .alert.acked { opacity: .55; }
@@ -64,6 +64,7 @@
                  box-shadow: 0 0 0 1px var(--edge); }
   #preview { max-width: 100%; display: block; }
   #faceFrame { position: absolute; display: none; border: 2px solid var(--accent); border-radius: 28%; pointer-events: none; }
+  #calState.good { color: var(--accent-deep); }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   #spots { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
   #debug { display: none; }

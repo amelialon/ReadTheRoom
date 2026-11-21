@@ -10,7 +10,7 @@
 <style>
   html, body { height: 100%; }
   body { display: flex; flex-direction: column; overflow: hidden; position: relative;
-         background: radial-gradient(120% 90% at 50% 40%, #f3f5f7 0%, var(--ground) 55%, var(--ground-deep) 100%); }
+         background: radial-gradient(120% 90% at 50% 40%, #fffdf9 0%, var(--ground) 55%, var(--ground-deep) 100%); }
   header { display: flex; align-items: center; gap: 14px; padding: 22px 32px 6px; }
   header h1 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; margin: 0 auto 0 0; }
   header .state { display: inline-flex; align-items: center; gap: 9px; padding: 7px 14px; border-radius: 999px;
@@ -26,20 +26,20 @@
   .spot { position: absolute; border: 2px solid rgba(255,255,255,.85); border-radius: var(--r-md);
           transition: left 600ms var(--ease), top 600ms var(--ease), width 600ms var(--ease), height 600ms var(--ease),
                       border-color 400ms var(--ease), box-shadow 400ms var(--ease); overflow: hidden; }
-  .spot .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(217,98,43,.28);
+  .spot .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(184,207,179,.45);
                 transition: height 100ms linear; }
   .spot.other { border: 1.5px dashed rgba(255,255,255,.45); }
-  .spot.looking { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(217,98,43,.25); }
-  .spot.asked { border-color: #fff; box-shadow: 0 0 0 4px var(--accent); }
+  .spot.looking { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(184,207,179,.5); }
+  .spot.asked { border-color: var(--accent); box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--accent); }
   .spot.calib { border-color: var(--accent); animation: breathe 1.6s var(--ease) infinite; }
-  .spot.calib .fill { background: rgba(217,98,43,.22); }
-  @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 3px rgba(217,98,43,.25); } 50% { box-shadow: 0 0 0 9px rgba(217,98,43,.08); } }
+  .spot.calib .fill { background: rgba(184,207,179,.35); }
+  @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 3px rgba(132,162,130,.4); } 50% { box-shadow: 0 0 0 9px rgba(132,162,130,.12); } }
   .tag { position: absolute; transform: translateY(-100%); margin-top: -8px; padding: 6px 12px; border-radius: 999px;
          background: rgba(255,255,255,.92); color: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 0;
          text-transform: none; box-shadow: var(--shadow); white-space: nowrap;
          transition: left 600ms var(--ease), top 600ms var(--ease), background 400ms var(--ease), color 400ms var(--ease); }
   .tag.other { font-weight: 500; color: var(--ink-2); background: rgba(255,255,255,.7); }
-  .tag.looking, .tag.asked, .tag.calib { background: var(--accent); color: var(--accent-ink); }
+  .tag.looking, .tag.asked, .tag.calib { background: var(--accent-deep); color: var(--accent-ink); }
 
   /* Without a scene camera: one plate per object. */
   #tiles { display: none; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 1000px; }
@@ -57,7 +57,7 @@
              background: var(--plate); box-shadow: var(--highlight), var(--shadow-lift); max-width: 900px; text-align: center; }
   #line { font-size: clamp(22px, 2.6vw, 36px); font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
   #sub { font-size: 15px; color: var(--ink-2); min-height: 1.3em; }
-  #line.asked { color: var(--accent); } #line.sent { color: var(--ink); } #line.calib { color: var(--accent); }
+  #line.asked { color: var(--accent-deep); } #line.sent { color: var(--ink); } #line.calib { color: var(--accent-deep); }
   #steps { display: none; gap: 6px; justify-content: center; margin-top: 4px; }
   #steps i { width: 26px; height: 4px; border-radius: 2px; background: var(--ground-deep); }
   #steps i.done { background: var(--accent); } #steps i.now { background: var(--ink); }
