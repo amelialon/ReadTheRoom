@@ -9,3 +9,5 @@ test-output.xml
 models/*.pt
 models/*.onnx
 weights/
+qnx/capture
+first_hour.txt
