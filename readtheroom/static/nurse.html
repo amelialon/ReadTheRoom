@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nurse station · Read the Room</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f3f5f8; color: #17202b; font-family: system-ui, sans-serif; }
+  header { background: #17202b; color: #fff; padding: 14px 20px; display: flex;
+           flex-wrap: wrap; gap: 10px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0 auto 0 0; }
+  .chip { font-size: 13px; padding: 4px 10px; border-radius: 12px; background: #2b3948; }
+  .chip.bad { background: #b3261e; } .chip.good { background: #1e7a47; }
+  #banner { display: none; background: #b3261e; color: #fff; padding: 12px 20px; font-weight: 600; }
+  section { max-width: 760px; margin: 0 auto; padding: 16px 20px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: #5b6878; }
+  .alert { background: #fff; border-left: 8px solid #d98b00; border-radius: 8px; padding: 14px 16px;
+           margin-bottom: 10px; display: flex; align-items: center; gap: 12px; }
+  .alert .msg { font-size: 19px; font-weight: 600; }
+  .alert .meta { font-size: 13px; color: #5b6878; margin-top: 3px; }
+  .alert .body { margin-right: auto; }
+  .alert.escalated { border-left-color: #b3261e; animation: pulse 1s infinite; }
+  .alert.acked { border-left-color: #1e7a47; opacity: .6; }
+  .alert.acked button { display: none; }
+  @keyframes pulse { 50% { background: #fde7e5; } }
+  @media (prefers-reduced-motion: reduce) { .alert.escalated { animation: none; background: #fde7e5; } }
+  button { font: inherit; padding: 10px 16px; border: 0; border-radius: 6px; background: #17202b;
+           color: #fff; cursor: pointer; }
+  button.light { background: #dfe4ea; color: #17202b; margin: 0 6px 6px 0; }
+  #empty { color: #5b6878; }
+  #check { font-size: 14px; color: #5b6878; margin-top: 8px; }
+  #debug { display: none; }
+  input { font: inherit; padding: 8px; width: 90px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="bed">Read the Room</h1>
+  <span class="chip" id="conn">Connecting…</span>
+  <span class="chip" id="face"></span>
+  <span class="chip" id="temp"></span>
+  <span class="chip" id="perf"></span>
+</header>
+<div id="banner"></div>
+<section>
+  <h2>Requests</h2>
+  <div id="empty">No requests yet.</div>
+  <div id="alerts"></div>
+</section>
+<section>
+  <h2>Setup</h2>
+  <button id="calibrate">Start calibration</button>
+  <div id="check"></div>
+</section>
+<section id="debug">
+  <h2>Simulation: where is the patient looking?</h2>
+  <div id="gaze"></div>
+  <p>Room temperature °C <input id="t" type="number" step="0.5">
+     <button class="light" id="setT">Set</button> <button class="light" id="clearT">Clear</button></p>
+</section>
+<script>
+const $ = id => document.getElementById(id);
+const post = (path, body) => fetch(path, {method: 'POST', body: JSON.stringify(body || {})});
+const cards = new Map();
+const seen = new Map();
+let audio = null, debugBuilt = false;
+document.addEventListener('pointerdown', () => { audio = audio || new AudioContext(); }, {once: true});
+function beep(freq, n) {
+  if (!audio) return;
+  for (let i = 0; i < n; i++) {
+    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + i * .25;
+    o.frequency.value = freq; o.connect(g); g.connect(audio.destination);
+    g.gain.setValueAtTime(.2, t); g.gain.exponentialRampToValueAtTime(.001, t + .2);
+    o.start(t); o.stop(t + .2);
+  }
+}
+function chip(id, text, cls) { $(id).textContent = text; $(id).className = 'chip ' + (cls || ''); }
+
+function render(s) {
+  const st = s.status;
+  $('bed').textContent = s.bed + ' · Read the Room';
+  chip('conn', 'Device online', 'good');
+  chip('face', st.face_ok ? 'Patient in view' : 'Patient not in view', st.face_ok ? 'good' : 'bad');
+  chip('temp', st.temp_c == null ? 'No temperature' : st.temp_c.toFixed(1) + ' °C');
+  chip('perf', st.fps + ' fps · ' + st.tick_ms + ' ms');
+  const banner = $('banner');
+  banner.style.display = st.face_lost || st.too_slow ? 'block' : 'none';
+  banner.textContent = st.face_lost
+    ? s.bed + ': the device cannot see the patient. Requests cannot be made until this is fixed.'
+    : s.bed + ': the device is running too slowly (' + st.fps + ' frames per second) to read gaze reliably.';
+
+  const ids = new Set(s.alerts.map(a => a.id));
+  for (const [id, el] of cards) if (!ids.has(id)) { el.remove(); cards.delete(id); seen.delete(id); }
+  s.alerts.slice().reverse().forEach(a => {
+    let el = cards.get(a.id);
+    if (!el) {
+      el = document.createElement('div');
+      const body = document.createElement('div'); body.className = 'body';
+      const msg = document.createElement('div'); msg.className = 'msg'; msg.textContent = a.message;
+      const meta = document.createElement('div'); meta.className = 'meta';
+      const btn = document.createElement('button'); btn.textContent = 'On my way';
+      btn.onclick = () => post('/api/ack', {id: a.id});
+      body.append(msg, meta); el.append(body, btn);
+      $('alerts').prepend(el);
+      cards.set(a.id, el);
+    }
+    el.className = 'alert ' + a.state;
+    const at = new Date(a.created_at * 1000).toLocaleTimeString();
+    const wait = Math.max(0, Math.round((a.acked_at || s.time) - a.created_at));
+    el.querySelector('.meta').textContent = a.state === 'acked'
+      ? at + ' · answered after ' + wait + ' s'
+      : at + ' · waiting ' + wait + ' s' + (a.urgent ? ' · URGENT' : a.state === 'escalated' ? ' · OVERDUE' : '');
+    if (seen.get(a.id) !== a.state) {
+      if (a.state === 'escalated') beep(880, 3); else if (a.state === 'pending') beep(660, 1);
+      seen.set(a.id, a.state);
+    }
+  });
+  $('empty').style.display = s.alerts.length ? 'none' : 'block';
+
+  const cal = s.calibration;
+  const results = Object.entries(s.self_check).map(([k, v]) => k + ' ' + Math.round(v * 100) + '%');
+  $('check').textContent = cal.active ? 'Calibrating: step ' + cal.step + ' of ' + cal.steps
+    : cal.error ? cal.error
+    : st.simulate ? 'Simulation mode: calibration is not needed.'
+    : !s.calibrated ? 'Not calibrated.'
+    : results.length ? 'Calibration self-check: ' + results.join(', ') : 'Calibrated (loaded from last run).';
+
+  if (st.simulate && !debugBuilt) {
+    debugBuilt = true;
+    $('debug').style.display = 'block';
+    const opts = [['rest', 'Screen centre'], ['yes', 'YES'], ['no', 'NO']]
+      .concat(s.zones.map(z => [z.id, z.label]), [[null, 'Elsewhere'], ['noface', 'Face hidden']]);
+    opts.forEach(([id, label]) => {
+      const b = document.createElement('button');
+      b.className = 'light'; b.textContent = label;
+      b.onclick = () => post('/api/debug/gaze', {label: id});
+      $('gaze').appendChild(b);
+    });
+  }
+}
+
+$('calibrate').onclick = () => post('/api/calibrate');
+$('setT').onclick = () => post('/api/debug/temp', {temp_c: parseFloat($('t').value)});
+$('clearT').onclick = () => post('/api/debug/temp', {temp_c: null});
+let lastMessage = 0, bedName = 'Device';
+function offline(text) {
+  chip('conn', text, 'bad');
+  $('banner').style.display = 'block';
+  $('banner').textContent = bedName + ': ' + text.toLowerCase() + '. The patient cannot make requests.';
+}
+const es = new EventSource('/events?role=nurse');
+es.onmessage = e => { lastMessage = Date.now(); const s = JSON.parse(e.data); bedName = s.bed; render(s); };
+es.onerror = () => offline('Device offline');
+setInterval(() => {
+  if (lastMessage && Date.now() - lastMessage > 3000) offline('Device not responding');
+}, 1000);
+</script>
+</body>
+</html>

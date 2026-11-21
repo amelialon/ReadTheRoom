@@ -1,0 +1,8 @@
+# Core (needed everywhere, including --simulate)
+numpy
+# Vision (not needed for --simulate). On the QNX Pi install with:
+#   sudo apk add mediapipe        (brings OpenCV and NumPy)
+mediapipe
+opencv-python
+# Dev
+pytest

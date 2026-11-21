@@ -1,0 +1,16 @@
+{
+  "zones": [
+    {"id": "water", "label": "water glass",
+     "question": "Are you thirsty? Do you need water?",
+     "message": "is thirsty and wants water"},
+    {"id": "remote", "label": "TV remote",
+     "question": "Do you want the TV on or changed?",
+     "message": "wants help with the TV"},
+    {"id": "blanket", "label": "blanket",
+     "question": "Do you want your blanket adjusted?",
+     "message": "wants the blanket adjusted", "climate": true},
+    {"id": "pain", "label": "PAIN card",
+     "question": "Are you in pain?",
+     "message": "is in PAIN", "urgent": true}
+  ]
+}

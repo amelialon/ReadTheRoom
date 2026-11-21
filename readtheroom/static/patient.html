@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Read the Room</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: #0b0f14; color: #e8edf2; font-family: system-ui, sans-serif;
+         display: grid; grid-template-columns: 24% 1fr 24%; overflow: hidden; }
+  .side { position: relative; display: flex; align-items: center; justify-content: center;
+          font-size: 9vw; font-weight: 800; letter-spacing: .02em; color: #2a3340;
+          border: 6px solid #161d26; transition: color .2s, border-color .2s; }
+  .side .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+                opacity: .35; transition: height .1s linear; }
+  .side span { position: relative; }
+  #yes .fill { background: #2fbf71; } #no .fill { background: #e5534b; }
+  body.prompt #yes { color: #2fbf71; border-color: #2fbf71; }
+  body.prompt #no { color: #e5534b; border-color: #e5534b; }
+  .side.target { color: #f5c542 !important; border-color: #f5c542 !important; }
+  main { display: flex; flex-direction: column; align-items: center; justify-content: center;
+         padding: 4vw; text-align: center; }
+  main.target { outline: 6px solid #f5c542; outline-offset: -6px; }
+  #headline { font-size: 4.2vw; font-weight: 700; line-height: 1.15; }
+  #sub { margin-top: 2vw; font-size: 1.7vw; color: #8b98a8; min-height: 2em; }
+  #bar { margin-top: 2vw; width: 60%; height: 10px; background: #161d26; border-radius: 5px;
+         overflow: hidden; visibility: hidden; }
+  #bar div { height: 100%; width: 0; background: #f5c542; }
+  #top { position: fixed; top: 14px; left: 0; right: 0; text-align: center; font-size: 15px;
+         color: #8b98a8; }
+  #dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+         background: #e5534b; margin-right: 6px; }
+  #dot.ok { background: #2fbf71; }
+  #calls { position: fixed; bottom: 0; left: 0; right: 0; }
+  #calls div { padding: 12px 18px; font-size: 1.8vw; text-align: center; background: #1b2a3f; }
+  #calls div.escalated { background: #5a1f1c; }
+  #calls div.acked { background: #17402b; }
+</style>
+</head>
+<body>
+<div class="side" id="yes"><div class="fill"></div><span>YES</span></div>
+<main id="centre">
+  <div id="headline">Connecting…</div>
+  <div id="sub"></div>
+  <div id="bar"><div></div></div>
+</main>
+<div class="side" id="no"><div class="fill"></div><span>NO</span></div>
+<div id="top"><span id="dot"></span><span id="status"></span></div>
+<div id="calls"></div>
+<script>
+const $ = id => document.getElementById(id);
+let audio = null, lastState = null;
+document.addEventListener('pointerdown', () => { audio = audio || new AudioContext(); }, {once: true});
+function chime(freq) {
+  if (!audio) return;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.frequency.value = freq; o.connect(g); g.connect(audio.destination);
+  g.gain.setValueAtTime(.15, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .4);
+  o.start(); o.stop(audio.currentTime + .4);
+}
+function fill(id, v) { $(id).querySelector('.fill').style.height = (v * 100) + '%'; }
+
+function render(s) {
+  const ses = s.session, cal = s.calibration, st = s.status;
+  document.body.className = '';
+  ['yes', 'no', 'centre'].forEach(id => $(id).classList.remove('target'));
+  fill('yes', 0); fill('no', 0);
+  $('bar').style.visibility = 'hidden';
+  let headline = '', sub = '';
+
+  if (cal.active) {
+    headline = cal.instruction;
+    sub = cal.recording ? 'Keep looking…' : 'Get ready';
+    const el = {yes: 'yes', no: 'no', rest: 'centre'}[cal.target];
+    if (el) $(el).classList.add('target');
+    $('bar').style.visibility = 'visible';
+    $('bar').firstElementChild.style.width = (cal.progress * 100) + '%';
+  } else if (!s.calibrated) {
+    headline = cal.error ? 'Calibration did not finish' : 'Not set up yet';
+    sub = cal.error || 'Ask staff to start calibration.';
+  } else if (ses.state === 'prompt') {
+    document.body.className = 'prompt';
+    headline = ses.question;
+    sub = 'Look left for YES, right for NO, and hold.';
+    if (ses.leader === 'yes') fill('yes', ses.progress);
+    if (ses.leader === 'no') fill('no', ses.progress);
+  } else if (ses.state === 'sent') {
+    headline = 'Sent to your nurse';
+  } else {
+    headline = 'Look at what you need';
+    const zone = s.zones.find(z => z.id === ses.leader);
+    if (zone) {
+      sub = zone.label;
+      $('bar').style.visibility = 'visible';
+      $('bar').firstElementChild.style.width = (ses.progress * 100) + '%';
+    }
+  }
+  $('headline').textContent = headline;
+  $('sub').textContent = sub;
+
+  if (ses.state !== lastState) {
+    if (ses.state === 'prompt') chime(660);
+    if (ses.state === 'sent') chime(880);
+    lastState = ses.state;
+  }
+
+  $('dot').className = st.face_ok ? 'ok' : '';
+  const bits = [st.face_ok ? 'Tracking' : 'Cannot see your face'];
+  if (st.temp_c != null) bits.push(st.temp_c.toFixed(1) + ' °C');
+  if (!st.nurse_screens) bits.push('Nurse station not connected');
+  $('status').textContent = bits.join('  ·  ');
+
+  const calls = $('calls');
+  calls.replaceChildren();
+  s.alerts.filter(a => a.state !== 'acked' || s.time - a.acked_at < 60).slice(0, 3).forEach(a => {
+    const d = document.createElement('div');
+    d.className = a.state;
+    const what = a.message.replace(/^[^:]*: patient /, '');
+    d.textContent = a.state === 'acked' ? 'Your nurse is on the way (' + what + ')'
+      : a.state === 'escalated' ? 'Still calling your nurse: ' + what
+      : 'Calling your nurse: ' + what;
+    calls.appendChild(d);
+  });
+}
+
+let lastMessage = 0;
+function offline(text) {
+  document.body.className = '';
+  $('headline').textContent = text;
+  $('sub').textContent = 'Requests cannot be made right now.';
+  $('dot').className = '';
+  $('status').textContent = '';
+}
+const es = new EventSource('/events?role=patient');
+es.onmessage = e => { lastMessage = Date.now(); render(JSON.parse(e.data)); };
+es.onerror = () => offline('Lost connection to the device');
+setInterval(() => {
+  if (lastMessage && Date.now() - lastMessage > 3000) offline('The device has stopped responding');
+}, 1000);
+</script>
+</body>
+</html>
