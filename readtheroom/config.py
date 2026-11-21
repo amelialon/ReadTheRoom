@@ -42,14 +42,14 @@ class Config:
 
     # Quick mode: directions from one look at the centre (see directions.py)
     gaze_mode: str = "quick"       # or "trained": the guided routine, objects anywhere
-    dir_h_threshold: float = 0.16
+    dir_h_threshold: float = 0.14
     dir_v_threshold: float = 0.14
     dir_adapt: float = 0.005
     # How much the iris position and the head angle add to the eye scores on
     # each axis, sign included. 0 = eye scores only. Values come from
     # `python -m readtheroom.tune_directions data/directions-*.json`.
     dir_iris_weight: float = 0.0
-    dir_head_weight: float = 0.0
+    dir_head_weight: float = 1.0
     dir_iris_v_weight: float = 0.0
     dir_head_v_weight: float = 0.0
     greet_settle_s: float = 0.8
