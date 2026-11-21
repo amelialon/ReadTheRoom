@@ -339,6 +339,7 @@ class App:
                 "answer_mode": self.cfg.answer_mode,
                 "gaze_mode": "simulate" if self.simulate else ("quick" if self.quick else "trained"),
                 "sides": self._sides if self.quick and not self.simulate else None,
+                "gaze_meter": self.reader.last() if self.quick and not self.simulate else None,
                 "preview": self._preview_on(),
                 "face_width": self._face_width(),
                 "face_box": self._face_box(),

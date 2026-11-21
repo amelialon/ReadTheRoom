@@ -43,6 +43,7 @@ class DirectionReader:
         self.v_threshold = v_threshold
         self.adapt_rate = adapt
         self.centre = None  # (h, v) when looking at the middle of the screen
+        self._last: dict = {}
 
     @staticmethod
     def _hv(feature):
@@ -57,11 +58,20 @@ class DirectionReader:
         self.centre = (sum(p[0] for p in pairs) / len(pairs),
                        sum(p[1] for p in pairs) / len(pairs))
 
+    def last(self) -> dict:
+        """The most recent reading, for a live readout: how far the eyes are
+        from centre on each axis, in units of the threshold (1.0 = just enough)."""
+        return dict(self._last)
+
     def read(self, feature) -> str | None:
         if self.centre is None or feature is None:
+            self._last = {}
             return None
         h, v = self._hv(feature)
         dh, dv = h - self.centre[0], v - self.centre[1]
+        s = signals(feature)
+        self._last = {"side": round(dh / self.h_threshold, 2), "up": round(dv / self.v_threshold, 2),
+                      "head_yaw": round(s["head_yaw"], 3)}
         if abs(dh) >= self.h_threshold:
             return LEFT if dh > 0 else RIGHT
         if dv >= self.v_threshold:

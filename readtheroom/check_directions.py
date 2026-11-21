@@ -32,6 +32,8 @@ STEPS = [
     ("left edge", LEFT, "Look at the left edge of the screen"),
     ("right edge", RIGHT, "Look at the right edge of the screen"),
     ("centre last", CENTRE, "Look at the centre of the screen"),
+    ("head left", None, "Turn your whole head to the left, as if looking at something there"),
+    ("head right", None, "Turn your whole head to the right, as if looking at something there"),
 ]
 
 
@@ -96,10 +98,11 @@ def main() -> None:
         reads = [reader.read(f) for f in features]
         counts = {d: reads.count(d) for d in (CENTRE, LEFT, RIGHT, UP) if reads.count(d)}
         correct = reads.count(expected)
-        if name != "centre":  # the first centre is what it learned from
+        if name != "centre" and expected:  # the first centre is what it learned from
             correct_total += correct
             frames_total += len(reads)
-        share = f"{100 * correct / len(reads):.0f}% {expected}" if reads else "no readable frames"
+        share = (f"{100 * correct / len(reads):.0f}% {expected}" if reads and expected
+                 else "head turn: see head_yaw" if reads else "no readable frames")
         print(f"{name:<13}{len(features):>4}/{seen:<3}"
               + "".join(f"{m:>9.3f} ({s:.3f})" for m, s in cols.values())
               + f"   {share}  {counts}")

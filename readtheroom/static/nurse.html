@@ -54,6 +54,7 @@
   <button class="light" id="previewBtn">Show camera view</button>
   <a href="/room" target="_blank" style="margin-left:8px">Open room view</a>
   <div id="check"></div>
+  <div id="meter" style="font-size:14px;color:#5b6878;margin-top:6px;font-variant-numeric:tabular-nums"></div>
   <div id="previewBox" style="display:none">
     <div style="position:relative;display:inline-block;margin-top:10px;line-height:0">
       <img id="preview" alt="Camera view" style="max-width:100%;border-radius:12px">
@@ -148,6 +149,12 @@ function render(s) {
            + '. Move these further from other targets, add light, and calibrate again.' : '')
     : 'Calibrated (loaded from last run).';
 
+  const gm = st.gaze_meter;
+  $('meter').textContent = !gm ? '' : !('side' in gm) ? 'Gaze: eyes not readable'
+    : 'Gaze: ' + (gm.side >= 1 ? 'LEFT' : gm.side <= -1 ? 'RIGHT' : gm.up >= 1 ? 'UP' : 'centre')
+      + ' · sideways ' + gm.side.toFixed(1) + ' · up ' + gm.up.toFixed(1)
+      + ' (1.0 is the trigger point; + is the patient\'s left) · head turn ' + gm.head_yaw.toFixed(2)
+      + (ses.gaze ? ' · read as: ' + ses.gaze : '');
   previewOn = st.preview;
   $('previewBtn').style.display = st.simulate ? 'none' : '';
   $('previewBtn').textContent = st.preview ? 'Hide camera view' : 'Show camera view';
