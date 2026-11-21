@@ -8,10 +8,10 @@ import time
 import traceback
 
 from .alerts import AlertStore
-from .calibration import Calibrator
-from .config import NO, REST, YES, Config
+from .calibration import Calibrator, control_targets
+from .config import ANSWER_MODES, REST, Config
 from .features import Ema
-from .prompts import load_needs, load_zones
+from .prompts import load_menu, load_needs, load_zones
 from .server import Hub, serve
 from .session import Session
 from .zones import ZoneClassifier
@@ -20,7 +20,7 @@ from .zones import ZoneClassifier
 class App:
     def __init__(self, cfg: Config, zones: dict, data_dir: str, hub: Hub,
                  source=None, extractor=None, sensor=None, simulate: bool = False,
-                 scene=None):
+                 scene=None, menu=()):
         self.cfg = cfg
         self.zones = zones
         self.hub = hub
@@ -31,14 +31,15 @@ class App:
         self.scene = scene  # SceneWorker, or None when object detection is off
         self._scene_version = 0
         os.makedirs(data_dir, exist_ok=True)
-        self._calibration_path = os.path.join(data_dir, "calibration.json")
+        # Each answer mode keeps its own file: the same target names mean
+        # different places on the screen.
+        name = "calibration.json" if cfg.answer_mode == "horizontal" else "calibration-vertical.json"
+        self._calibration_path = os.path.join(data_dir, name)
         self.alerts = AlertStore(cfg.escalate_after_s, os.path.join(data_dir, "alerts.json"))
-        self.session = Session(cfg, zones, self.alerts)
+        self.session = Session(cfg, zones, self.alerts, menu)
         self.classifier = ZoneClassifier()
         self.self_check: dict = {}
-        targets = [(REST, "Look at the centre of the screen"),
-                   (YES, "Look at YES on the left"),
-                   (NO, "Look at NO on the right")]
+        targets = control_targets(cfg.answer_mode)
         targets += [(z.id, f"Look at the {z.label}") for z in zones.values()]
         self._expected = {t[0] for t in targets}
         self.calibrator = Calibrator(targets, cfg.settle_s, cfg.record_s)
@@ -213,6 +214,7 @@ class App:
                 "too_slow": 0 < self._fps < self.cfg.min_fps,
                 "nurse_screens": self.hub.count("nurse"),
                 "simulate": self.simulate,
+                "answer_mode": self.cfg.answer_mode,
                 "preview": self._preview_on(),
                 "face_width": self._face_width(),
                 "brightness": None if self._frame is None else round(float(self._frame[::8, ::8].mean())),
@@ -284,11 +286,14 @@ def main() -> None:
                    help="object detector for scene photos; skipped if the file is missing")
     p.add_argument("--data-dir", default=os.path.join(root, "data"))
     p.add_argument("--bed", default="Bed 4")
+    p.add_argument("--answer-mode", choices=ANSWER_MODES, default="horizontal",
+                   help="vertical: YES is look up, NO is look down, for patients "
+                        "who can only move their eyes up and down")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8000)
     args = p.parse_args()
 
-    cfg = Config(bed=args.bed)
+    cfg = Config(bed=args.bed, answer_mode=args.answer_mode)
     zones = load_zones(args.zones)
     source = extractor = sensor = None
     if not args.simulate:
@@ -304,7 +309,8 @@ def main() -> None:
 
     scene = _open_scene(args.scene_model, zones, load_needs(args.zones))
     hub = Hub()
-    app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate, scene)
+    app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate, scene,
+              load_menu(args.zones))
     serve(hub, app, args.host, args.port)
     print(f"Patient screen: http://localhost:{args.port}/")
     print(f"Nurse station:  http://localhost:{args.port}/nurse")

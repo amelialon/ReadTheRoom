@@ -30,6 +30,25 @@
       "urgent": true
     }
   ],
+  "menu": [
+    {
+      "label": "Pain",
+      "message": "is in PAIN",
+      "urgent": true
+    },
+    {
+      "label": "Move me",
+      "message": "wants to be moved to a more comfortable position"
+    },
+    {
+      "label": "Toilet",
+      "message": "needs the toilet"
+    },
+    {
+      "label": "Something else",
+      "message": "needs something that is not on the list. Please come and ask"
+    }
+  ],
   "needs": {
     "water bottle": {
       "question": "Are you thirsty? Do you need water?",

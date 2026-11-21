@@ -67,6 +67,7 @@
 <section id="debug">
   <h2>Simulation: where is the patient looking?</h2>
   <div id="gaze"></div>
+  <p id="simHelp"></p>
   <p>Room temperature °C <input id="t" type="number" step="0.5">
      <button class="light" id="setT">Set</button> <button class="light" id="clearT">Clear</button></p>
 </section>
@@ -181,6 +182,9 @@ function render(s) {
   if (st.simulate && !debugBuilt) {
     debugBuilt = true;
     $('debug').style.display = 'block';
+    $('simHelp').textContent = s.session.more
+      ? 'To open the MORE menu (pain, moving, toilet): press "Screen centre", then "NO" and wait 3 seconds. '
+        + 'In the menu, "YES" chooses the item shown and "NO" goes to the next one.' : '';
     const opts = [['rest', 'Screen centre'], ['yes', 'YES'], ['no', 'NO']]
       .concat(s.zones.map(z => [z.id, z.label]), [[null, 'Elsewhere'], ['noface', 'Face hidden']]);
     opts.forEach(([id, label]) => {

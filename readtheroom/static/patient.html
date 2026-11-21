@@ -16,8 +16,13 @@
                 opacity: .35; transition: height .1s linear; }
   .side span { position: relative; }
   #yes .fill { background: #2fbf71; } #no .fill { background: #e5534b; }
-  body.prompt #yes { color: #2fbf71; border-color: #2fbf71; }
+  body.prompt #yes, body.menu #yes { color: #2fbf71; border-color: #2fbf71; }
   body.prompt #no { color: #e5534b; border-color: #e5534b; }
+  /* MORE and NEXT are not a "no", so they are not red. */
+  body.more #no { color: #5b7fa6; border-color: #24364b; }
+  body.menu #no { color: #6cb0ff; border-color: #6cb0ff; }
+  body.more #no .fill, body.menu #no .fill { background: #6cb0ff; }
+  body.more #no, body.menu #no { font-size: 6.5vw; }
   .side.target { color: #f5c542 !important; border-color: #f5c542 !important; }
   main { display: flex; flex-direction: column; align-items: center; justify-content: center;
          padding: 4vw; text-align: center; }
@@ -36,11 +41,24 @@
   #calls div { padding: 12px 18px; font-size: 1.8vw; text-align: center; background: #1b2a3f; }
   #calls div.escalated { background: #5a1f1c; }
   #calls div.acked { background: #17402b; }
+  #count { font-size: 1.9vw; color: #8b98a8; margin-bottom: 1.5vw; min-height: 1.2em; }
+  body.menu #headline { font-size: 7vw; }
+
+  /* Up/down answers: YES across the top, NO across the bottom. */
+  body.vertical { grid-template-columns: 1fr; grid-template-rows: 22% 1fr 22%; }
+  body.vertical .side { font-size: 13vh; }
+  body.vertical.more #no, body.vertical.menu #no { font-size: 11vh; }
+  body.vertical .side .fill { top: 0; right: auto; width: 0; height: 100% !important;
+                              transition: width .1s linear; }
+  body.vertical main { padding: 1vw 4vw; }
+  body.vertical #top { top: calc(22% + 10px); }
+  body.vertical #calls { bottom: 22%; }
 </style>
 </head>
 <body>
 <div class="side" id="yes"><div class="fill"></div><span>YES</span></div>
 <main id="centre">
+  <div id="count"></div>
   <div id="headline">Connecting…</div>
   <div id="sub"></div>
   <div id="bar"><div></div></div>
@@ -50,7 +68,7 @@
 <div id="calls"></div>
 <script>
 const $ = id => document.getElementById(id);
-let audio = null, lastState = null;
+let audio = null, lastState = null, lastItem = null;
 document.addEventListener('pointerdown', () => { audio = audio || new AudioContext(); }, {once: true});
 function chime(freq) {
   if (!audio) return;
@@ -60,15 +78,23 @@ function chime(freq) {
   g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .4);
   o.start(); o.stop(audio.currentTime + .4);
 }
-function fill(id, v) { $(id).querySelector('.fill').style.height = (v * 100) + '%'; }
+let vertical = false;
+function fill(id, v) {
+  const f = $(id).querySelector('.fill');
+  f.style.height = vertical ? '' : (v * 100) + '%';
+  f.style.width = vertical ? (v * 100) + '%' : '';
+}
+function mode(name) { document.body.className = (vertical ? 'vertical ' : '') + name; }
 
 function render(s) {
   const ses = s.session, cal = s.calibration, st = s.status;
-  document.body.className = '';
+  vertical = st.answer_mode === 'vertical';
+  const yesWay = vertical ? 'up' : 'left', noWay = vertical ? 'down' : 'right';
+  mode('');
   ['yes', 'no', 'centre'].forEach(id => $(id).classList.remove('target'));
   fill('yes', 0); fill('no', 0);
   $('bar').style.visibility = 'hidden';
-  let headline = '', sub = '';
+  let headline = '', sub = '', count = '', noText = 'NO';
 
   if (cal.active) {
     headline = cal.instruction;
@@ -81,15 +107,30 @@ function render(s) {
     headline = cal.error ? 'Calibration did not finish' : 'Not set up yet';
     sub = cal.error || 'Ask staff to start calibration.';
   } else if (ses.state === 'prompt') {
-    document.body.className = 'prompt';
+    mode('prompt');
     headline = ses.question;
-    sub = 'Look left for YES, right for NO, and hold.';
+    sub = 'Look ' + yesWay + ' for YES, ' + noWay + ' for NO, and hold.';
+    if (ses.leader === 'yes') fill('yes', ses.progress);
+    if (ses.leader === 'no') fill('no', ses.progress);
+  } else if (ses.state === 'menu') {
+    mode('menu');
+    noText = ses.menu.index + 1 < ses.menu.count ? 'NEXT' : 'CLOSE';
+    count = 'Do you need this?  ' + (ses.menu.index + 1) + ' of ' + ses.menu.count;
+    headline = ses.menu.label;
+    sub = 'Look ' + yesWay + ' and hold for YES. Your nurse is told straight away. '
+      + 'Look ' + noWay + ' and hold for ' + noText + '.';
     if (ses.leader === 'yes') fill('yes', ses.progress);
     if (ses.leader === 'no') fill('no', ses.progress);
   } else if (ses.state === 'sent') {
     headline = 'Sent to your nurse';
   } else {
     headline = 'Look at what you need';
+    if (ses.more) {
+      mode('more');
+      noText = 'MORE';
+      sub = 'For pain, moving, the toilet or anything else: look ' + noWay + ' at MORE and keep looking.';
+      fill('no', ses.more_progress);
+    }
     const zone = s.zones.find(z => z.id === ses.leader);
     if (zone) {
       sub = zone.label;
@@ -99,12 +140,17 @@ function render(s) {
   }
   $('headline').textContent = headline;
   $('sub').textContent = sub;
+  $('count').textContent = count;
+  $('no').querySelector('span').textContent = noText;
 
   if (ses.state !== lastState) {
-    if (ses.state === 'prompt') chime(660);
+    if (ses.state === 'prompt' || ses.state === 'menu') chime(660);
     if (ses.state === 'sent') chime(880);
     lastState = ses.state;
   }
+  // A short, lower sound each time the menu moves to the next item.
+  const item = ses.menu ? ses.menu.index : null;
+  if (item !== lastItem) { if (item) chime(520); lastItem = item; }
 
   $('dot').className = st.face_ok ? 'ok' : '';
   const bits = [st.face_ok ? 'Tracking' : 'Cannot see your face'];
@@ -127,7 +173,8 @@ function render(s) {
 
 let lastMessage = 0;
 function offline(text) {
-  document.body.className = '';
+  mode('');
+  $('count').textContent = '';
   $('headline').textContent = text;
   $('sub').textContent = 'Requests cannot be made right now.';
   $('dot').className = '';
