@@ -23,8 +23,13 @@ class OpenCVCamera:
 
 class FileFrameSource:
     """Reads the newest JPEG written to a fixed path by a separate capture
-    process (for example a small C program built on QNX's mjpeg_example).
+    process (qnx/capture.c on the Pi, or qnx/frame_relay.py as a last resort).
     The writer must replace the file atomically: write a temp file, then rename.
+
+    A frame counts as new when the file's time, size or identity changes. Some
+    filesystems only keep whole seconds (untested: QNX's may be one of them),
+    which would hide all but one frame a second, so in that case the bytes
+    themselves are compared.
     """
 
     def __init__(self, path: str):
@@ -33,19 +38,24 @@ class FileFrameSource:
 
         self._cv2, self._np = cv2, np
         self._path = path
-        self._mtime = None
+        self._key = None
+        self._data = None
 
     def read(self):
         try:
-            mtime = os.stat(self._path).st_mtime_ns
-            if mtime == self._mtime:
+            st = os.stat(self._path)
+            key = (st.st_mtime_ns, st.st_size, st.st_ino)
+            coarse = st.st_mtime_ns % 1_000_000_000 == 0
+            if key == self._key and not coarse:
                 return None
             with open(self._path, "rb") as f:
                 data = f.read()
         except OSError:
             return None
+        if key == self._key and data == self._data:
+            return None
         frame = self._cv2.imdecode(self._np.frombuffer(data, self._np.uint8),
                                    self._cv2.IMREAD_COLOR)
         if frame is not None:
-            self._mtime = mtime
+            self._key, self._data = key, data
         return frame
