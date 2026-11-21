@@ -15,5 +15,8 @@
   "pill bottle",
   "fan"
  ],
- "size": 640
+ "size": [
+  480,
+  640
+ ]
 }
