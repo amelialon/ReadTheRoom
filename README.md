@@ -10,7 +10,7 @@ Needs only Python 3 and NumPy.
 python3 -m readtheroom --simulate
 ```
 
-Open `http://localhost:8000/` (patient screen) and `http://localhost:8000/nurse` (nurse station) in two windows. The nurse page has buttons that stand in for where the patient is looking: press "water glass", wait for the question, press "YES".
+Open `http://localhost:8000/` (patient screen) and `http://localhost:8000/nurse` (nurse station) in two windows. The nurse page has buttons that stand in for where the patient is looking: press "water bottle", wait for the question, press "YES".
 
 ## Run with a webcam (laptop)
 
