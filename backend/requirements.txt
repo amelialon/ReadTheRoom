@@ -1,0 +1,3 @@
+# Schema tests only. The FastAPI service is a later change.
+psycopg[binary]>=3.2
+pytest>=8
