@@ -124,68 +124,68 @@
   #bedLine { font-size: 13px; color: var(--ink-2); }
   #frame .top .chips { margin-left: auto; display: flex; gap: 18px; }
   #banner { display: none; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 999px; background: var(--danger-wash); color: var(--danger); font-weight: 600; font-size: 14px; }
-  #body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(340px, .9fr); gap: 24px; min-height: 0; }
+  #body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; min-height: 0; }
 
   /* Camera card: room on the front, patient on the back, flipped like a card. */
   #camWrap { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-  #cam { position: relative; width: 100%; aspect-ratio: 4 / 3; perspective: 1600px; margin: 0 auto; }
-  #camInner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 560ms var(--ease); }
-  #cam.flipped #camInner { transform: rotateY(180deg); }
-  .face { position: absolute; inset: 0; border-radius: var(--r-lg); overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden;
-          background: rgba(255, 255, 255, .35); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 0 0 1px rgba(255, 255, 255, .6); }
-  .face.back { transform: rotateY(180deg); }
-  .face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
-  .face img:not([src]) { visibility: hidden; }
-  .face .hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
-  .face .corner { position: absolute; top: 12px; left: 12px; }
+  #cam { position: relative; width: 100%; aspect-ratio: 4 / 3; margin: 0 auto; }
+  .layer { position: absolute; overflow: hidden; background: rgba(255, 255, 255, .35);
+           box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 0 0 1px rgba(255, 255, 255, .6); }
+  .layer.big { inset: 0; border-radius: var(--r-lg); }
+  .layer.small { top: 14px; left: 14px; width: 28%; aspect-ratio: 4 / 3; border-radius: 14px; cursor: pointer; z-index: 2;
+                 box-shadow: 0 0 0 2px rgba(255, 255, 255, .9), 0 14px 36px -12px rgba(40, 42, 38, .45); transition: transform 160ms var(--ease); }
+  .layer.small:active { transform: scale(.97); }
+  @media (hover: hover) and (pointer: fine) { .layer.small:hover { transform: scale(1.02); } }
+  .layer img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+  .layer img:not([src]) { visibility: hidden; }
+  .layer .hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
+  .layer.small .hint { font-size: 11px; padding: 10px; }
+  .layer .name { position: absolute; left: 10px; bottom: 10px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
+                 background: rgba(255, 255, 255, .8); color: var(--ink); pointer-events: none; }
+  .layer.big .name { display: none; }
   #stage { position: absolute; inset: 0; pointer-events: none; }
   .spot { position: absolute; top: 0; left: 0; border: 2px solid rgba(255, 255, 255, .9); border-radius: 12px; box-shadow: 0 0 0 1px rgba(40, 42, 38, .15);
-          transition: transform 400ms var(--ease), border-color 300ms var(--ease), box-shadow 300ms var(--ease); overflow: hidden; }
+          overflow: hidden; display: grid; place-items: center; padding: 4px; transition: transform 400ms var(--ease), border-color 300ms var(--ease), box-shadow 300ms var(--ease); }
   .spot.other { border-color: rgba(255, 255, 255, .45); border-style: dashed; box-shadow: none; }
   .spot.looking { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(184, 207, 179, .5); }
   .spot.asked { border-color: var(--accent); box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--accent); }
   .spot .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(184, 207, 179, .55); transition: height 120ms linear; }
-  .label { position: absolute; top: 0; left: 0; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--ink);
-           background: rgba(255, 255, 255, .85); box-shadow: 0 1px 4px rgba(40, 42, 38, .15); white-space: nowrap; transition: transform 400ms var(--ease); }
-  .label.other { color: var(--ink-2); background: rgba(255, 255, 255, .6); }
-  .label.asked, .label.looking { background: var(--accent); color: #fff; }
+  .spot .label { position: relative; max-width: 100%; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1.3; color: var(--ink);
+                 background: rgba(255, 255, 255, .85); box-shadow: 0 1px 4px rgba(40, 42, 38, .15); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spot.tiny .label, .layer.small .label { display: none; }
+  .spot.other .label { color: var(--ink-2); background: rgba(255, 255, 255, .6); }
+  .spot.asked .label, .spot.looking .label { background: var(--accent); color: #fff; }
   #faceFrame { position: absolute; display: none; border: 2px solid var(--accent); border-radius: 28%; pointer-events: none; }
-  #camBar { display: flex; align-items: center; gap: 10px; }
-  #camBar .seg { display: inline-flex; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, .5); box-shadow: 0 0 0 1px rgba(255, 255, 255, .6); position: relative; }
-  #camBar .seg button { position: relative; z-index: 1; border: 0; background: transparent; font: inherit; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: 999px; color: var(--ink-2); cursor: pointer;
-                        transition: color 200ms var(--ease); }
-  #camBar .seg button.on { color: var(--ink); }
-  #camBar .seg .thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: var(--plate);
-                        box-shadow: 0 1px 3px rgba(40, 42, 38, .15); transition: transform 260ms var(--ease); }
-  #camBar .seg.second .thumb { transform: translateX(100%); }
+  #camBar { display: flex; align-items: center; gap: 10px; min-height: 20px; }
   #camHelp { margin-left: auto; text-align: right; }
+  #camTip { font-size: 13px; color: var(--ink-3); }
 
   /* Requests: glass rows with a tick to acknowledge. */
   #reqs { display: flex; flex-direction: column; min-height: 0; }
-  #reqs .head { display: flex; align-items: baseline; gap: 12px; padding: 4px 4px 12px; }
-  #reqs .head h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+  #reqs .head { display: flex; align-items: baseline; gap: 10px; padding: 2px 4px 10px; }
+  #reqs .head h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
   #reqs .head .quiet { margin-left: auto; }
-  #alerts { display: flex; flex-direction: column; gap: 10px; overflow: auto; padding: 2px; margin: -2px; }
-  .alert { display: grid; grid-template-columns: 68px 1fr 44px; gap: 14px; align-items: center; padding: 14px 14px 14px 18px; border-radius: 20px;
+  #alerts { display: flex; flex-direction: column; gap: 8px; overflow: auto; padding: 2px; margin: -2px; }
+  .alert { display: grid; grid-template-columns: 52px 1fr 36px; gap: 10px; align-items: center; padding: 10px 10px 10px 14px; border-radius: 16px;
            background: rgba(255, 255, 255, .55); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 1px rgba(255, 255, 255, .6);
            transition: background 240ms var(--ease), opacity 400ms var(--ease), transform 260ms var(--ease); }
   @starting-style { .alert { opacity: 0; transform: translateY(8px); } }
-  .alert .time { font-size: 22px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
-  .alert .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .alert .msg { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
-  .alert .meta { font-size: 12.5px; color: var(--ink-2); }
+  .alert .time { font-size: 17px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+  .alert .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .alert .msg { font-size: 14px; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; }
+  .alert .meta { font-size: 11.5px; color: var(--ink-2); }
   .alert.pending { background: rgba(246, 226, 233, .85); }
   .alert.escalated { background: rgba(246, 227, 224, .9); }
   .alert.escalated .time, .alert.escalated .meta { color: var(--danger); } .alert.escalated .meta { font-weight: 600; }
   .alert.acked { background: rgba(255, 255, 255, .35); color: var(--ink-3); }
   .alert.acked .time, .alert.acked .meta { color: var(--ink-3); } .alert.acked .msg { font-weight: 600; }
-  .tick { width: 44px; height: 44px; border-radius: 999px; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--ink-2);
+  .tick { width: 36px; height: 36px; border-radius: 999px; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--ink-2);
           background: var(--plate); box-shadow: 0 0 0 1px rgba(40, 42, 38, .12); transition: transform 140ms var(--ease), background 220ms var(--ease), color 220ms var(--ease), box-shadow 220ms var(--ease); }
-  .tick .icon { width: 20px; height: 20px; transition: transform 220ms var(--ease); transform: scale(.85); }
+  .tick .icon { width: 17px; height: 17px; transition: transform 220ms var(--ease); transform: scale(.85); }
   .tick:active { transform: scale(.92); }
   .alert.acked .tick, .tick.sent { background: var(--accent); color: #fff; box-shadow: 0 0 0 1px var(--accent); cursor: default; }
   .alert.acked .tick .icon, .tick.sent .icon { transform: none; }
-  #empty { padding: 28px 18px; color: var(--ink-2); font-size: 15px; line-height: 1.5; border-radius: 20px; background: rgba(255, 255, 255, .35); }
+  #empty { padding: 20px 16px; color: var(--ink-2); font-size: 14px; line-height: 1.5; border-radius: 20px; background: rgba(255, 255, 255, .35); }
 
   #unpaired { display: none; place-items: center; text-align: center; min-height: 0; flex: 1; }
   #frame.bare .chips, #frame.bare #tempPill, #frame.bare #banner { visibility: hidden; }
@@ -293,26 +293,26 @@
     <div id="body">
       <div id="camWrap">
         <div id="cam">
-          <div id="camInner">
-            <div class="face front">
-              <img id="scenePhoto" alt="Room camera">
-              <div id="stage"></div>
-              <div class="hint" id="sceneHint">Waiting for the first photo from the room camera.</div>
-            </div>
-            <div class="face back">
-              <img id="preview" alt="Patient camera"><div id="faceFrame"></div>
-              <div class="hint" id="previewHint">Turning the patient camera on.</div>
-            </div>
+          <div class="layer big" id="roomLayer" data-side="room">
+            <img id="scenePhoto" alt="Room camera">
+            <div id="stage"></div>
+            <div class="hint" id="sceneHint">Waiting for the first photo from the room camera.</div>
+            <span class="name">Room</span>
+          </div>
+          <div class="layer small" id="patientLayer" data-side="patient">
+            <img id="preview" alt="Patient camera"><div id="faceFrame"></div>
+            <div class="hint" id="previewHint">Turning the patient camera on.</div>
+            <span class="name">Patient</span>
           </div>
         </div>
         <div id="camBar">
-          <div class="seg" id="seg"><div class="thumb"></div><button class="on" data-side="room">Room</button><button data-side="patient">Patient</button></div>
+          <span id="camTip">Tap the small picture to swap</span>
           <div class="quiet" id="camHelp"></div>
         </div>
       </div>
       <div id="reqs">
         <div class="head"><h2>Requests</h2><span class="quiet" id="reqCount"></span>
-          <button class="ghost staff-only" id="clearDone" style="height:34px;font-size:13px">Clear answered</button></div>
+          <button class="ghost staff-only" id="clearDone" style="height:30px;font-size:12px;padding:0 11px">Clear</button></div>
         <div id="empty">Nothing asked for yet. When the patient looks at something and answers yes, it shows up here.</div>
         <div id="alerts"></div>
       </div>
@@ -388,7 +388,7 @@
 const $ = id => document.getElementById(id);
 const post = (path, body) => fetch(path, {method: 'POST', body: JSON.stringify(body || {})});
 const cards = new Map(), seen = new Map(), els = new Map();
-let audio = null, debugBuilt = false, state = null, online = false, photoId = -1, previewOn = false, streaming = false, lastMessage = 0, bedName = 'Device';
+let layers, audio = null, debugBuilt = false, state = null, online = false, photoId = -1, previewOn = false, streaming = false, lastMessage = 0, bedName = 'Device';
 document.addEventListener('pointerdown', () => { audio = audio || new AudioContext(); }, {once: true});
 function beep(freq, n) {
   if (!audio) return;
@@ -450,17 +450,41 @@ $('backLive').onclick = () => go('bed', 'live');
 $('prevBed').onclick = () => { bedIndex = (bedIndex + beds.length - 1) % beds.length; go('bed'); };
 $('nextBed').onclick = () => { bedIndex = (bedIndex + 1) % beds.length; go('bed'); };
 
-/* Camera card: the room on the front, the patient on the back. */
+/* Camera card: one picture fills the card, the other sits in its corner.
+   Tapping the small one swaps them, moving each picture from where it was
+   to where it goes (measure, swap, animate back from the old place). */
 let side = 'room';
-function flipTo(which) {
+function swapTo(which) {
+  if (which === side) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const layers = [$('roomLayer'), $('patientLayer')];
+  const before = layers.map(l => l.getBoundingClientRect());
   side = which;
-  $('cam').classList.toggle('flipped', side === 'patient');
-  $('seg').classList.toggle('second', side === 'patient');
-  $('seg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.side === side));
-  if (state && !state.status.simulate) post('/api/preview', {on: side === 'patient'});
+  layers.forEach(l => { const big = l.dataset.side === side; l.classList.toggle('big', big); l.classList.toggle('small', !big); });
+  if (state) renderScene(state);
+  if (reduce) return;
+  layers.forEach((l, i) => {
+    const a = before[i], b = l.getBoundingClientRect();
+    l.animate([{transform: 'translate(' + (a.left - b.left) + 'px,' + (a.top - b.top) + 'px) scale(' + (a.width / b.width) + ',' + (a.height / b.height) + ')'},
+               {transform: 'none'}], {duration: 360, easing: 'cubic-bezier(.32,.72,0,1)'});
+    l.style.transformOrigin = 'top left';
+  });
 }
-$('seg').querySelectorAll('button').forEach(b => b.onclick = () => flipTo(b.dataset.side));
-$('previewBtn').onclick = () => { closeAll(); go('bed'); flipTo(side === 'patient' ? 'room' : 'patient'); };
+layers = [$('roomLayer'), $('patientLayer')];
+layers.forEach(l => l.onclick = () => { if (l.classList.contains('small')) swapTo(l.dataset.side); });
+$('previewBtn').onclick = () => { closeAll(); go('bed'); swapTo(side === 'patient' ? 'room' : 'patient'); };
+/* The patient picture stays on while a caregiver is looking at this bed. The
+   device switches it off by itself three minutes after the last request. */
+function wantPreview() { return $('bed').classList.contains('on') && beds[bedIndex].id === 'live' && document.visibilityState === 'visible'; }
+let previewWanted = false, lastKeep = 0;
+setInterval(() => {
+  if (!state || state.status.simulate) return;
+  const want = wantPreview();
+  if (want && (!previewWanted || Date.now() - lastKeep > 60000)) { post('/api/preview', {on: true}); lastKeep = Date.now(); }
+  if (!want && previewWanted) post('/api/preview', {on: false});
+  previewWanted = want;
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (!wantPreview() && previewWanted && state && !state.status.simulate) { post('/api/preview', {on: false}); previewWanted = false; } });
 const pv = $('preview');
 setInterval(() => {
   if (previewOn && !streaming) { pv.src = '/preview.mjpg?t=' + Date.now(); streaming = true; }
@@ -477,19 +501,20 @@ function overlapping(a, b) {
 function place(key, box, size, label, cls, progress) {
   let e = els.get(key);
   if (!e) {
-    e = {box: document.createElement('div'), tag: document.createElement('div'), fill: document.createElement('div')};
-    e.fill.className = 'fill'; e.box.appendChild(e.fill);
-    $('stage').append(e.box, e.tag); els.set(key, e);
+    e = {box: document.createElement('div'), tag: document.createElement('span'), fill: document.createElement('div')};
+    e.fill.className = 'fill'; e.tag.className = 'label'; e.box.append(e.fill, e.tag);
+    $('stage').append(e.box); els.set(key, e);
   }
   const [w, h] = size, [x1, y1, x2, y2] = box;
   const sw = $('stage').clientWidth, sh = $('stage').clientHeight;
-  e.box.className = 'spot ' + cls; e.tag.className = 'label ' + cls;
+  const bw = (x2 - x1) / w * sw, bh = (y2 - y1) / h * sh;
+  e.box.className = 'spot ' + cls + (bw < 48 || bh < 26 ? ' tiny' : '');
   e.box.style.transform = 'translate(' + (x1 / w * sw) + 'px,' + (y1 / h * sh) + 'px)';
   e.box.style.width = ((x2 - x1) / w * 100) + '%'; e.box.style.height = ((y2 - y1) / h * 100) + '%';
-  e.tag.style.transform = 'translate(' + (x1 / w * sw + 6) + 'px,' + (y1 / h * sh + 6) + 'px)';
   e.tag.textContent = label; e.fill.style.height = (progress * 100) + '%';
 }
 function fitCam(w, h) {
+  if (side === 'patient') { const n = $('preview').naturalWidth; if (n) { h = $('preview').naturalHeight; w = n; } else { w = 4; h = 3; } }
   const wrap = $('camWrap'), bar = $('camBar');
   const narrow = matchMedia('(max-width: 900px)').matches;
   const availW = wrap.clientWidth, availH = Math.max(120, wrap.clientHeight - bar.offsetHeight - 12);
@@ -521,9 +546,9 @@ function renderScene(s) {
     if (area > 0.6 || located.some(p => overlapping(p.box, f.box) > 0.2)) return;
     live.add('o:' + f.label + i); place('o:' + f.label + i, f.box, sc.size, f.label, 'other', 0);
   });
-  for (const [key, e] of els) if (!live.has(key)) { e.box.remove(); e.tag.remove(); els.delete(key); }
+  for (const [key, e] of els) if (!live.has(key)) { e.box.remove(); els.delete(key); }
   const sides = s.status.sides;
-  $('camHelp').textContent = side === 'patient' ? '' : sc.age_s > 30 ? 'Room camera quiet for ' + Math.round(sc.age_s) + ' s'
+  $('camHelp').textContent = sc.age_s > 30 ? 'Room camera quiet for ' + Math.round(sc.age_s) + ' s'
     : sides ? 'Left: ' + (sides.left || []).map(z => names[z] || z).join(', ') + ' · Right: ' + (sides.right || []).map(z => names[z] || z).join(', ')
     : 'Photo ' + Math.round(sc.age_s) + ' s ago';
 }
@@ -652,7 +677,7 @@ function render(s) {
       + (ses.gaze ? '. Read as: ' + ses.gaze : '');
   previewOn = st.preview;
   $('previewBtn').style.display = st.simulate ? 'none' : '';
-  $('previewBtn').textContent = side === 'patient' ? 'Back to the room camera' : 'Show the patient camera';
+  $('previewBtn').textContent = side === 'patient' ? 'Make the room picture big' : 'Make the patient picture big';
   const ff = $('faceFrame');
   if (st.preview && st.face_box) {
     const [x1, y1, x2, y2] = st.face_box;
@@ -662,7 +687,7 @@ function render(s) {
     ff.style.borderColor = st.gaze_ok ? 'var(--accent)' : 'var(--danger)';
   } else ff.style.display = 'none';
   $('previewHint').style.display = st.preview ? 'none' : 'grid';
-  $('previewHint').textContent = st.simulate ? 'No camera in simulation mode.' : 'Turning the patient camera on.';
+  $('previewHint').textContent = st.simulate ? 'No camera in simulation' : 'Patient camera starting';
   if (st.preview) {
     const tips = [];
     if (st.face_width == null) tips.push('No face found: aim the camera at the patient.');
@@ -672,9 +697,8 @@ function render(s) {
       tips.push(st.gaze_ok ? 'Eyes readable.' : 'Eyes not readable (red frame).');
     }
     if (st.brightness != null) tips.push('Brightness ' + st.brightness + '/255' + (st.brightness < 60 ? ': too dark, add light on the face.' : st.brightness < 100 ? ': a bit dim.' : ': good.'));
-    tips.push('Mirrored view. Switches off by itself after 3 minutes.');
+    tips.push('Mirrored view.');
     $('previewHelp').textContent = tips.join(' ');
-    if (side === 'patient') $('camHelp').textContent = tips.slice(0, 2).join(' ');
   } else $('previewHelp').textContent = '';
 
   if (s.scene) {
