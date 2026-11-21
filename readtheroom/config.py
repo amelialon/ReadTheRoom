@@ -5,6 +5,7 @@ from dataclasses import dataclass
 # Control zones live on the patient screen; every other zone is a real object.
 REST, YES, NO = "rest", "yes", "no"
 CONTROL_ZONES = (REST, YES, NO)
+ANSWER_MODES = ("horizontal", "vertical")
 
 
 @dataclass
@@ -20,6 +21,16 @@ class Config:
     prompt_timeout_s: float = 10.0
     backoff_s: float = 180.0       # ignore a zone after NO or a timeout
     sent_display_s: float = 4.0
+
+    # Menu of needs that have no object. It opens on a held NO while idle;
+    # the hold must be clearly longer than an answer (confirm_window_s).
+    menu_open_s: float = 3.0
+    menu_rearm_s: float = 0.5        # gaze must be off NO this long before a hold counts
+    menu_step_timeout_s: float = 8.0  # no answer to a menu item closes the menu
+
+    # "horizontal": YES left, NO right. "vertical": YES top, NO bottom, for
+    # patients who can only move their eyes up and down.
+    answer_mode: str = "horizontal"
 
     escalate_after_s: float = 60.0
     face_ok_s: float = 2.0

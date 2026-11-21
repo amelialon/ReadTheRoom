@@ -33,6 +33,29 @@ def load_zones(path: str) -> dict:
     return zones
 
 
+@dataclass(frozen=True)
+class MenuItem:
+    label: str     # shown to the patient
+    message: str   # sent to the nurse, after "Bed N: patient "
+    urgent: bool = False
+
+
+def load_menu(path: str) -> list:
+    """Needs that have no object to look at. No "menu" key means no menu."""
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f).get("menu", [])
+    items = []
+    for entry in raw:
+        item = MenuItem(**entry)
+        if not (isinstance(item.label, str) and item.label.strip()
+                and isinstance(item.message, str) and item.message.strip()):
+            raise ValueError("every menu item needs a label and a message")
+        if not isinstance(item.urgent, bool):
+            raise ValueError(f"menu item {item.label!r}: urgent must be true or false")
+        items.append(item)
+    return items
+
+
 def load_needs(path: str) -> dict:
     """Question and message for each object the scene camera can recognise."""
     with open(path, encoding="utf-8") as f:

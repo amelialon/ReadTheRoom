@@ -1,6 +1,22 @@
 from __future__ import annotations
 
 
+from .config import ANSWER_MODES, NO, REST, YES
+
+
+def control_targets(answer_mode: str = "horizontal") -> list:
+    """The on-screen targets every calibration starts with."""
+    if answer_mode not in ANSWER_MODES:
+        raise ValueError(f"answer mode must be one of {', '.join(ANSWER_MODES)}")
+    if answer_mode == "vertical":
+        return [(REST, "Look at the centre of the screen"),
+                (YES, "Look at YES at the top"),
+                (NO, "Look at NO at the bottom")]
+    return [(REST, "Look at the centre of the screen"),
+            (YES, "Look at YES on the left"),
+            (NO, "Look at NO on the right")]
+
+
 class Calibrator:
     """Walks the patient through 'look at X' for each target and records features.
 

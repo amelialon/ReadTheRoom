@@ -12,6 +12,22 @@ python3 -m readtheroom --simulate
 
 Open `http://localhost:8000/` (patient screen) and `http://localhost:8000/nurse` (nurse station) in two windows. The nurse page has buttons that stand in for where the patient is looking: press "water bottle", wait for the question, press "YES".
 
+### Needs with no object: the MORE menu
+
+Pain, being moved and the toilet have nothing to look at. While the screen says "Look at what you need", the patient looks at MORE (the NO side) and keeps looking for 3 seconds. The screen then shows one need at a time: hold YES to tell the nurse, hold NO for the next one. After the last one, or after 8 seconds with no answer, the menu closes and nothing is sent. The list is the `menu` part of `config/zones.json`; remove it to switch the menu off.
+
+In simulation: press "Screen centre", then "NO" and wait 3 seconds, then "YES" or "NO" for each item.
+
+### Up and down instead of left and right
+
+For patients who can only move their eyes up and down:
+
+```
+python3 -m readtheroom --simulate --answer-mode vertical
+```
+
+YES moves to the top of the screen and NO (and MORE) to the bottom. Calibration asks for "YES at the top" and "NO at the bottom", and is saved separately from a left/right calibration.
+
 ## Run with a webcam (laptop)
 
 One-time setup:
@@ -115,4 +131,5 @@ python3 -m pytest
 ## Known limits
 
 - The pages have no login: anyone on the same network can acknowledge requests or start calibration.
+- The MORE menu and the up/down mode have only been tried in simulation, not with a camera or a patient. Looking down can hide the eyes behind the eyelids, so the up/down mode may need the camera placed lower.
 - Vision code (`features.py`, `camera.py`) and the sensor driver have not been run against real hardware yet.
