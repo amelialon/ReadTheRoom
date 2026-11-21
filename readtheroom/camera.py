@@ -12,17 +12,22 @@ class OpenCVCamera:
     and the device reacts to pictures that are more and more out of date.
     """
 
-    def __init__(self, index: int = 0, width: int = 1280, height: int = 720):
+    def __init__(self, index: int = 0, width: int = 640, height: int = 480):
         import threading
 
         import cv2
 
         self._cap = cv2.VideoCapture(index)
+        if not self._cap.isOpened():
+            raise RuntimeError(f"cannot open camera {index}")
+        # Ask for MJPG before the size: over USB, raw 720p frames arrive at a
+        # frame or two a second on many laptops, and the holds cannot be read.
+        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # ignored by some drivers
-        if not self._cap.isOpened():
-            raise RuntimeError(f"cannot open camera {index}")
+        got = (int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        print(f"Camera {index}: {got[0]}x{got[1]}, driver reports {self._cap.get(cv2.CAP_PROP_FPS):.0f} fps")
         self._lock = threading.Lock()
         self._frame = None
         self._fresh = False

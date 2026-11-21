@@ -10,7 +10,12 @@ LOOK = ["eyeLookInLeft", "eyeLookOutLeft", "eyeLookUpLeft", "eyeLookDownLeft",
 # Landmark indices: (iris centre, eye corner a, eye corner b)
 EYES = [(468, 33, 133), (473, 362, 263)]
 NOSE_TIP = 1
-N_FEATURES = len(LOOK) + 2 * len(EYES) + 3 + 2
+# Layout: 8 eye scores, 4 iris offsets, yaw/pitch/roll, nose tip (x, y),
+# then the head position (x, y, z in cm, camera axes) and the 3x3 head
+# rotation (face axes in camera axes, row by row). The last twelve let the
+# gaze be cast as a ray in the room instead of a pattern to match.
+HEAD_T, HEAD_R = 17, 20
+N_FEATURES = len(LOOK) + 2 * len(EYES) + 3 + 2 + 3 + 9
 
 
 def iris_offset(iris, a, b):
@@ -107,6 +112,9 @@ class FaceFeatureExtractor:
         for iris, a, b in EYES:
             feat.extend(iris_offset((lm[iris].x, lm[iris].y), (lm[a].x, lm[a].y),
                                     (lm[b].x, lm[b].y)))
-        feat.extend(head_angles(result.facial_transformation_matrixes[0]))
+        matrix = np.asarray(result.facial_transformation_matrixes[0], dtype=float)
+        feat.extend(head_angles(matrix))
         feat.extend((lm[NOSE_TIP].x, lm[NOSE_TIP].y))
+        feat.extend(matrix[:3, 3].tolist())
+        feat.extend(matrix[:3, :3].reshape(-1).tolist())
         return True, np.asarray(feat, dtype=float)

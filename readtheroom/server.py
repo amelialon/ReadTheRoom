@@ -83,6 +83,12 @@ def make_handler(hub: Hub, app):
             elif url.path == "/theme.css":
                 with open(os.path.join(STATIC, "theme.css"), "rb") as f:
                     self._send(200, f.read(), "text/css; charset=utf-8")
+            elif url.path == "/table.jpg":
+                jpeg = app.table_photo()
+                if jpeg is None:
+                    self._json(404, {"error": "no table photo yet"})
+                else:
+                    self._send(200, jpeg, "image/jpeg")
             elif url.path == "/scene.jpg":
                 jpeg = app.scene_photo()
                 if jpeg is None:
@@ -164,7 +170,7 @@ def make_handler(hub: Hub, app):
             except ValueError:
                 length = -1
             path = urlparse(self.path).path
-            limit = MAX_PHOTO if path == "/api/scene" else MAX_BODY
+            limit = MAX_PHOTO if path in ("/api/scene", "/api/table") else MAX_BODY
             if not 0 <= length <= limit:
                 self.close_connection = True
                 return self._json(400, {"error": "bad length"})
@@ -173,6 +179,11 @@ def make_handler(hub: Hub, app):
                 if not raw:
                     return self._json(400, {"error": "empty photo"})
                 return self._json(200, {"ok": app.submit_scene(raw)})
+            if path == "/api/table":
+                try:
+                    return self._json(200, app.set_table_photo(raw))
+                except ValueError as exc:
+                    return self._json(400, {"error": str(exc)})
             try:
                 body = json.loads(raw or b"{}")
                 if not isinstance(body, dict):
@@ -186,6 +197,18 @@ def make_handler(hub: Hub, app):
                     return self._json(200, {"cleared": app.alerts.clear_answered()})
                 if path == "/api/scene/reset":
                     return self._json(200, {"ok": app.reset_scene()})
+                if path == "/api/table/snap":
+                    return self._json(200, app.snap_table_photo())
+                if path == "/api/table/targets":
+                    if not isinstance(body.get("targets"), list):
+                        raise ValueError
+                    app.set_table_targets(body["targets"])
+                    return self._json(200, {"ok": True})
+                if path == "/api/teach":
+                    return self._json(200, {"ok": app.request_teach(str(body["target"]))})
+                if path == "/api/teach/forget":
+                    target = body.get("target")
+                    return self._json(200, {"ok": app.forget_target(None if target is None else str(target))})
                 if path == "/api/ack":
                     return self._json(200, {"ok": app.alerts.ack(int(body["id"]))})
                 if path == "/api/calibrate":

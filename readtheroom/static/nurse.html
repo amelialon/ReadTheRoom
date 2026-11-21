@@ -155,6 +155,22 @@
   .spot.tiny .label, .layer.small .label { display: none; }
   .spot.other .label { color: var(--ink-2); background: rgba(255, 255, 255, .6); }
   .spot.asked .label, .spot.looking .label { background: var(--accent); color: #fff; }
+  /* Table mode: the photo is the map, the dot is where the gaze falls on it. */
+  #dot { position: absolute; top: 0; left: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 999px; display: none; pointer-events: none;
+         background: var(--accent); box-shadow: 0 0 0 4px rgba(255, 255, 255, .85), 0 0 0 6px rgba(132, 162, 130, .45); transition: transform 120ms linear; }
+  .spot.calib { border-color: #e4a9c0; box-shadow: 0 0 0 4px rgba(246, 226, 233, .9); animation: breathe 1.2s infinite; }
+  .spot.learned { border-color: rgba(255, 255, 255, .95); }
+  @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 3px rgba(228, 169, 192, .5); } 50% { box-shadow: 0 0 0 9px rgba(228, 169, 192, .15); } }
+  #stage.adding { pointer-events: auto; cursor: crosshair; }
+  body.adding #camTip { color: var(--accent-deep); font-weight: 600; }
+  .trow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+  .trow input, .trow select { font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 10px; border: 0; background: var(--plate); box-shadow: 0 0 0 1px var(--edge); min-width: 0; color: var(--ink); }
+  .trow .teach { white-space: nowrap; }
+  .trow .teach.done { background: var(--accent); color: #fff; box-shadow: none; }
+  .trow .teach.busy { background: var(--blush); box-shadow: none; }
+  .trow .x { width: 30px; height: 30px; padding: 0; }
+  #targetRows { display: flex; flex-direction: column; gap: 8px; }
+  #photoFile { display: none; }
   #faceFrame { position: absolute; display: none; border: 2px solid var(--accent); border-radius: 28%; pointer-events: none; }
   #camBar { display: flex; align-items: center; gap: 10px; min-height: 20px; }
   #camHelp { margin-left: auto; text-align: right; }
@@ -296,6 +312,7 @@
           <div class="layer big" id="roomLayer" data-side="room">
             <img id="scenePhoto" alt="Room camera">
             <div id="stage"></div>
+            <div id="dot"></div>
             <div class="hint" id="sceneHint">Waiting for the first photo from the room camera.</div>
             <span class="name">Room</span>
           </div>
@@ -358,6 +375,21 @@
 
 <aside id="device" class="glass">
   <div class="head"><h2>Device</h2><span class="quiet" id="perf"></span><button class="ghost round" id="closeDevice" aria-label="Close" style="margin-left:auto"><svg class="icon"><use href="#i-x"/></svg></button></div>
+  <div class="col" id="tableCol" style="display:none">
+    <div class="section-head"><h3>Table</h3><span class="tag" id="tableTag" style="margin-left:auto"></span></div>
+    <div class="note" id="tableNote"></div>
+    <div class="row">
+      <label class="pill soft small" for="photoFile" style="cursor:pointer">Upload a photo</label><input id="photoFile" type="file" accept="image/jpeg">
+      <button class="pill soft small" id="snapBtn">Use the patient camera</button>
+      <button class="pill soft small" id="addSpot">Add a spot</button>
+    </div>
+    <div id="targetRows"></div>
+    <div class="row">
+      <button class="pill small" id="saveTargets">Save spots <span class="go">&#8594;</span></button>
+      <button class="pill soft small" id="forgetAll">Forget all looks</button>
+    </div>
+    <div class="quiet" id="teachHelp"></div>
+  </div>
   <div class="col" id="patient">
     <div class="section-head"><h3>Patient camera</h3><span class="tag" id="calTag" style="margin-left:auto"></span></div>
     <div class="note" id="check"></div>
@@ -388,7 +420,7 @@
 const $ = id => document.getElementById(id);
 const post = (path, body) => fetch(path, {method: 'POST', body: JSON.stringify(body || {})});
 const cards = new Map(), seen = new Map(), els = new Map();
-let layers, audio = null, debugBuilt = false, state = null, online = false, photoId = -1, previewOn = false, streaming = false, lastMessage = 0, bedName = 'Device';
+let layers, audio = null, debugBuilt = null, state = null, online = false, photoId = -1, previewOn = false, streaming = false, lastMessage = 0, bedName = 'Device';
 document.addEventListener('pointerdown', () => { audio = audio || new AudioContext(); }, {once: true});
 function beep(freq, n) {
   if (!audio) return;
@@ -521,7 +553,46 @@ function fitCam(w, h) {
   const scale = narrow ? availW / w : Math.min(availW / w, availH / h);
   $('cam').style.width = Math.floor(w * scale) + 'px'; $('cam').style.aspectRatio = w + ' / ' + h;
 }
+/* Table mode: targets on the one photo, the look being taught, the live dot. */
+let draft = null, draftKey = null, adding = false;
+function renderTable(s) {
+  const tb = s.table, ses = s.session;
+  const have = tb.photo_id != null && tb.size;
+  $('sceneHint').style.display = have ? 'none' : 'grid';
+  $('sceneHint').textContent = 'No photo of the table yet. Open Device from the menu and add one.';
+  if (!have) { fitCam(4, 3); $('camHelp').textContent = ''; $('dot').style.display = 'none'; return; }
+  fitCam(tb.size[0], tb.size[1]);
+  if (tb.photo_id !== photoId) {
+    photoId = tb.photo_id;
+    const url = '/table.jpg?id=' + photoId;
+    $('scenePhoto').src = url; $('bg').src = url; $('bg').classList.add('on');
+  }
+  const asked = ses.state === 'prompt' ? ses.zone : null, looking = ses.state === 'idle' ? ses.leader : null;
+  const live = new Set();
+  tb.targets.forEach(t => {
+    const learned = t.id in tb.learned;
+    const cls = t.id === tb.teaching ? 'calib' : t.id === asked ? 'asked' : t.id === looking ? 'looking' : learned ? 'learned' : 'other';
+    live.add('t:' + t.id);
+    place('t:' + t.id, t.box, tb.size, t.label + (learned ? ' \u2713' : ''), cls, t.id === looking ? ses.progress : 0);
+  });
+  if (!tb.targets.length) tb.found.forEach((f, i) => { live.add('o:' + i); place('o:' + i, f.box, tb.size, f.label, 'other', 0); });
+  for (const [key, e] of els) if (!live.has(key)) { e.box.remove(); els.delete(key); }
+  const uv = tb.gaze_uv, dot = $('dot');
+  if (uv && side === 'room' && !tb.teaching) {
+    dot.style.display = 'block';
+    dot.style.transform = 'translate(' + (uv[0] * $('stage').clientWidth) + 'px,' + (uv[1] * $('stage').clientHeight) + 'px)';
+  } else dot.style.display = 'none';
+  const names = Object.fromEntries(tb.targets.map(t => [t.id, t.label]));
+  const ranked = Object.entries(tb.errors).sort((a, b) => a[1] - b[1]);
+  const taught = tb.targets.filter(t => t.id in tb.learned).length;
+  $('camHelp').textContent = tb.teaching ? 'Teaching: the patient looks at the ' + (names[tb.teaching] || 'screen')
+    : !tb.targets.length ? (tb.found.length ? 'Open Device to confirm the spots the detector found' : 'Open Device to mark the spots')
+    : taught < tb.targets.length ? 'Taught ' + taught + ' of ' + tb.targets.length + ' spots'
+    : ranked.length ? 'Nearest: ' + (names[ranked[0][0]] || 'screen') + ', ' + ranked[0][1] + '\u00b0 off' : 'Eyes not readable';
+}
+
 function renderScene(s) {
+  if (s.table) return renderTable(s);
   const sc = s.scene, ses = s.session, cal = s.calibration;
   const names = Object.fromEntries(s.zones.map(z => [z.id, z.label]));
   const asked = !cal.active && ses.state === 'prompt' ? ses.zone : null;
@@ -656,6 +727,9 @@ function render(s) {
   renderScene(s);
 
   /* Device sheet. */
+  if (s.table) renderTableSheet(s);
+  $('tableCol').style.display = s.table ? '' : 'none';
+  $('calibrate').style.display = s.table ? 'none' : '';
   $('calibrate').firstChild.textContent = (st.gaze_mode === 'quick' ? 'Re-centre' : 'Start calibration') + ' ';
   const results = Object.entries(s.self_check).map(([k, v]) => k + ' ' + Math.round(v * 100) + '%');
   const weak = Object.entries(s.self_check).filter(([k, v]) => v < 0.7).map(([k]) => k);
@@ -664,6 +738,7 @@ function render(s) {
   chip('calState', calText, s.calibrated && !cal.active ? 'good' : '');
   $('check').textContent = cal.active ? 'Calibrating: step ' + cal.step + ' of ' + cal.steps
     : cal.error ? cal.error
+    : s.table ? (st.simulate ? 'Simulation: press a spot below to stand in for a look.' : s.calibrated ? 'Reading the gaze as a ray from the head: one look per spot is enough.' : 'Teach the screen and at least one spot in the Table section.')
     : st.simulate ? 'Simulation mode: calibration is not needed.'
     : st.gaze_mode === 'quick' ? (s.calibrated ? 'The device learned the centre from one look at the screen and keeps it up to date.' : 'Waiting for the patient to look at the screen.')
     : !s.calibrated ? 'Not calibrated.'
@@ -721,8 +796,10 @@ function render(s) {
     }
   }
 
-  if (st.simulate && !debugBuilt) {
-    debugBuilt = true;
+  const zoneKey = s.zones.map(z => z.id).join('|');
+  if (st.simulate && debugBuilt !== zoneKey) {
+    debugBuilt = zoneKey;
+    $('gaze').replaceChildren();
     $('debug').style.display = 'flex';
     $('simHelp').textContent = ses.more
       ? 'To open the MORE menu (pain, moving, toilet): press "Screen centre", then "NO" and wait 3 seconds. In the menu, "YES" chooses the item shown and "NO" goes to the next one.' : '';
@@ -737,6 +814,88 @@ function render(s) {
 }
 
 $('calibrate').onclick = () => post('/api/calibrate');
+
+/* Table sheet: the photo, the spots on it, and teaching each look. */
+function renderTableSheet(s) {
+  const tb = s.table, st = s.status;
+  const key = tb.photo_id + ':' + JSON.stringify(tb.targets);
+  if (draft === null || draftKey !== key) {
+    draftKey = key;
+    draft = tb.targets.length ? tb.targets.map(t => ({id: t.id, label: t.label, need: t.id === 'rest' ? 'rest' : t.need, box: t.box}))
+      : suggestionsFrom(tb);
+    buildRows(tb);
+  }
+  const taught = tb.targets.filter(t => t.id in tb.learned).length;
+  $('tableTag').textContent = !tb.photo_id ? 'No photo' : !tb.targets.length ? 'No spots' : tb.teaching ? 'Teaching' : taught < tb.targets.length ? taught + ' of ' + tb.targets.length + ' taught' : 'Ready';
+  $('tableTag').className = 'tag ' + (tb.ready ? 'good' : '');
+  $('tableNote').textContent = !tb.photo_id ? 'Photograph the table from where the patient sits, with the screen in the picture.'
+    : !tb.targets.length ? (tb.found.length ? 'Check the spots the detector found, then save.' : 'Nothing recognised. Add spots by tapping the photo.')
+    : 'Teach each spot: press Teach, then the patient looks at it for two seconds.';
+  $('snapBtn').style.display = st.simulate ? 'none' : '';
+  draft.forEach((t, i) => {
+    const btn = $('teach-' + i);
+    if (!btn) return;
+    const saved = tb.targets.some(x => x.id === t.id);
+    const learned = t.id in tb.learned, busy = tb.teaching === t.id;
+    btn.disabled = !saved || st.simulate || !!tb.teaching;
+    btn.className = 'pill soft small teach' + (busy ? ' busy' : learned ? ' done' : '');
+    btn.textContent = busy ? 'Watching\u2026' : learned ? 'Taught, ' + (tb.learned[t.id] || 0) + '\u00b0 steady' : saved ? 'Teach' : 'Save first';
+  });
+  $('teachHelp').textContent = s.calibration.error ? s.calibration.error
+    : Object.entries(s.self_check).filter(([k, v]) => v < 0.7).length ? 'A taught look is hard to recognise; move that object further from the others and teach it again.' : '';
+}
+function suggestionsFrom(tb) {
+  const out = [], used = new Set();
+  tb.found.slice().sort((a, b) => b.score - a.score).forEach(f => {
+    if (['laptop', 'monitor', 'screen'].includes(f.label) && !used.has('rest')) { out.push({id: 'rest', label: 'screen', need: 'rest', box: f.box}); used.add('rest'); }
+    else if (tb.needs.includes(f.label) && !used.has(f.label)) { out.push({id: null, label: f.label, need: f.label, box: f.box}); used.add(f.label); }
+  });
+  return out;
+}
+function buildRows(tb) {
+  $('targetRows').replaceChildren(...draft.map((t, i) => {
+    const row = document.createElement('div'); row.className = 'trow';
+    const label = document.createElement('input'); label.value = t.label; label.placeholder = 'Name'; label.oninput = () => { t.label = label.value; };
+    const need = document.createElement('select');
+    [['rest', 'the screen']].concat(tb.needs.map(n => [n, n])).forEach(([v, text]) => { const o = document.createElement('option'); o.value = v; o.textContent = text; need.appendChild(o); });
+    need.value = t.need; need.onchange = () => { t.need = need.value; };
+    const teach = document.createElement('button'); teach.id = 'teach-' + i; teach.className = 'pill soft small teach'; teach.textContent = 'Teach';
+    teach.onclick = () => post('/api/teach', {target: t.id});
+    const x = document.createElement('button'); x.className = 'ghost x'; x.innerHTML = '<svg class="icon"><use href="#i-x"/></svg>'; x.setAttribute('aria-label', 'Remove');
+    x.onclick = () => { draft.splice(i, 1); buildRows(tb); };
+    row.append(label, need, teach, x); return row;
+  }));
+}
+async function saveTargets() {
+  const targets = draft.map(t => t.need === 'rest' ? {id: 'rest', box: t.box} : {need: t.need, label: t.label || t.need, box: t.box});
+  const r = await post('/api/table/targets', {targets});
+  if (!r.ok) $('teachHelp').textContent = 'Could not save the spots: ' + ((await r.json()).error || r.status);
+}
+$('saveTargets').onclick = saveTargets;
+$('forgetAll').onclick = () => post('/api/teach/forget', {target: null});
+$('snapBtn').onclick = async () => {
+  const r = await fetch('/api/table/snap', {method: 'POST', body: '{}'});
+  if (!r.ok) $('teachHelp').textContent = (await r.json()).error || 'Could not take the photo.';
+  draft = null;
+};
+$('photoFile').onchange = async () => {
+  const file = $('photoFile').files[0];
+  if (!file) return;
+  const r = await fetch('/api/table', {method: 'POST', headers: {'Content-Type': 'image/jpeg'}, body: file});
+  if (!r.ok) $('teachHelp').textContent = (await r.json()).error || 'Could not use that photo.';
+  draft = null; $('photoFile').value = '';
+};
+$('addSpot').onclick = () => { adding = !adding; document.body.classList.toggle('adding', adding); $('stage').classList.toggle('adding', adding);
+  $('camTip').textContent = adding ? 'Tap the photo where the object is' : 'Tap the small picture to swap'; if (adding) closeAll(); };
+$('stage').addEventListener('click', e => {
+  if (!adding || !state || !state.table || !state.table.size) return;
+  const r = $('stage').getBoundingClientRect(), [w, h] = state.table.size;
+  const u = (e.clientX - r.left) / r.width, v = (e.clientY - r.top) / r.height;
+  const box = [Math.max(0, (u - .06) * w), Math.max(0, (v - .08) * h), Math.min(w, (u + .06) * w), Math.min(h, (v + .08) * h)];
+  draft.push({id: null, label: 'spot', need: state.table.needs[0] || 'rest', box});
+  adding = false; document.body.classList.remove('adding'); $('stage').classList.remove('adding'); $('camTip').textContent = 'Tap the small picture to swap';
+  saveTargets().then(() => { document.body.classList.add('device'); });
+});
 $('relearn').onclick = () => post('/api/scene/reset');
 $('clearDone').onclick = () => post('/api/alerts/clear');
 $('setT').onclick = () => post('/api/debug/temp', {temp_c: parseFloat($('t').value)});

@@ -41,7 +41,7 @@ class Config:
     climate_reask_s: float = 900.0
 
     # Quick mode: directions from one look at the centre (see directions.py)
-    gaze_mode: str = "quick"       # or "trained": the guided routine, objects anywhere
+    gaze_mode: str = "table"       # "quick": directions only; "trained": the guided routine
     dir_h_threshold: float = 0.14
     dir_v_threshold: float = 0.14
     dir_adapt: float = 0.005
@@ -52,6 +52,17 @@ class Config:
     dir_head_weight: float = 1.0
     dir_iris_v_weight: float = 0.0
     dir_head_v_weight: float = 0.0
+    # Table mode: the gaze is cast as a ray from the head through the eyes
+    # (see gazeray.py); each object is a point learned from one look.
+    ray_eye_gain: float = 0.75      # radians per unit of the eye scores
+    ray_eye_clamp: float = 0.3      # the eye scores saturate past this
+    ray_iris_gain: float = 2.5      # radians per eye-width of iris travel
+    ray_distance_cm: float = 70.0   # how far the objects are assumed to be
+    ray_accept_deg: float = 9.0     # a look counts within this of a target
+    ray_margin_deg: float = 2.0     # and this much closer than the runner-up
+    ray_answer_deg: float = 7.0     # left/right of the screen for YES/NO
+    teach_settle_s: float = 0.8
+    teach_record_s: float = 1.6
     greet_settle_s: float = 0.8
     greet_record_s: float = 1.7
     greet_retry_s: float = 5.0

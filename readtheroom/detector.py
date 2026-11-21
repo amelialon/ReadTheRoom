@@ -47,7 +47,11 @@ class SceneDetector:
         self.overlap = overlap
         if ort is not None:
             self._session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
-            self._input = self._session.get_inputs()[0].name
+            inp = self._session.get_inputs()[0]
+            self._input = inp.name
+            shape = list(inp.shape)[-2:]  # the sidecar can disagree with the file
+            if all(isinstance(v, int) for v in shape):
+                self.size = tuple(shape)
             self.backend = "onnxruntime"
         else:
             self._session = _OpenCVSession(cv2, model_path)

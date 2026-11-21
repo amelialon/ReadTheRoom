@@ -12,16 +12,18 @@ from .calibration import Calibrator, control_targets
 from .config import ANSWER_MODES, Config, NO, REST, YES
 from .directions import CENTRE, LEFT, RIGHT, UP, DirectionReader
 from .features import Ema
+from .gazeray import GazeRay
 from .prompts import Zone, load_menu, load_needs, load_zones
 from .server import Hub, serve
 from .session import Session
+from .table import Table
 from .zones import ZoneClassifier
 
 
 class App:
     def __init__(self, cfg: Config, zones: dict, data_dir: str, hub: Hub,
                  source=None, extractor=None, sensor=None, simulate: bool = False,
-                 scene=None, menu=(), needs=None):
+                 scene=None, menu=(), needs=None, detector=None):
         self.cfg = cfg
         self.zones = zones
         self.hub = hub
@@ -63,6 +65,25 @@ class App:
             self._greet_after = 0.0
             self._q_state = None
             self._q_centred = False
+        # Table mode: one photo of the table is the map, each object on it is a
+        # point in the room learned from one look, and the gaze is a ray.
+        self.table_mode = cfg.gaze_mode == "table" and cfg.answer_mode == "horizontal"
+        if self.table_mode:
+            self.quick = False
+            self.ray = GazeRay(cfg.ray_eye_gain, cfg.ray_eye_clamp, cfg.ray_iris_gain,
+                               cfg.ray_distance_cm, cfg.ray_accept_deg, cfg.ray_margin_deg)
+            self._ray_path = os.path.join(data_dir, "ray.json")
+            self.table = Table(os.path.join(data_dir, "table"), needs or {})
+            self.detector = detector
+            self._needs = needs or {}
+            self._want_teach: str | None = None
+            self._teaching: str | None = None
+            self._table_dirty = False
+            self._feature = None
+            self._q_state = None
+            self._q_centred = False
+            self.calibrator = Calibrator([(REST, "Look at the screen")],
+                                         cfg.teach_settle_s, cfg.teach_record_s, passes=1)
         self._want_calibration = False
         self._debug_gaze: str | None = REST
         self._temp: float | None = None
@@ -79,6 +100,14 @@ class App:
         self._load_calibration()
 
     def _load_calibration(self) -> None:
+        if self.table_mode:
+            if os.path.exists(self._ray_path):
+                try:
+                    self.ray.load(self._ray_path)
+                except (OSError, ValueError, KeyError, TypeError):
+                    self.ray.forget()
+            self._apply_table()
+            return
         if self.simulate or self.quick or not os.path.exists(self._calibration_path):
             return
         try:
@@ -90,6 +119,71 @@ class App:
             self.classifier.fitted = False
 
     # Called from web-server threads.
+    def set_table_photo(self, jpeg: bytes) -> dict:
+        if not self.table_mode:
+            raise ValueError("not in table mode")
+        suggested = self.table.set_photo(jpeg, self.detector)
+        self.ray.forget()
+        self.self_check = {}
+        self._table_dirty = True
+        return {"found": self.table.found, "suggested": suggested}
+
+    def set_table_targets(self, targets: list) -> None:
+        if not self.table_mode:
+            raise ValueError("not in table mode")
+        self.table.set_targets(targets)
+        self._table_dirty = True
+
+    def request_teach(self, target: str) -> bool:
+        if not self.table_mode or self.simulate:
+            return False
+        if target not in {t["id"] for t in self.table.targets}:
+            return False
+        self._want_teach = target
+        return True
+
+    def forget_target(self, target: str | None) -> bool:
+        if not self.table_mode:
+            return False
+        self.ray.forget(target)
+        if target is None:
+            self.self_check = {}
+        else:
+            self.self_check.pop(target, None)
+        try:
+            self.ray.save(self._ray_path)
+        except OSError:
+            pass
+        return True
+
+    def table_photo(self):
+        return self.table.photo if self.table_mode else None
+
+    def snap_table_photo(self) -> dict:
+        """Use the patient camera's current picture as the table photo: the
+        nurse turns the camera to the table for a moment."""
+        if not self.table_mode or self.simulate:
+            raise ValueError("no camera to photograph with")
+        frame = self._frame
+        if frame is None:
+            raise ValueError("no picture from the camera yet")
+        import cv2
+        ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not ok:
+            raise ValueError("could not encode the picture")
+        return self.set_table_photo(jpeg.tobytes())
+
+    def _apply_table(self) -> None:
+        """The targets on the photo become what can be asked about. With no
+        photo yet, the zones file stands in."""
+        zones = self.table.zones() if self.table.photo else self.zones
+        self.session.set_zones(zones)
+        keep = {t["id"] for t in self.table.targets}
+        for target in list(self.ray.points):
+            if target not in keep:
+                self.ray.forget(target)
+                self.self_check.pop(target, None)
+
     def request_calibration(self) -> bool:
         if self.simulate:
             return False
@@ -189,7 +283,41 @@ class App:
             return None, face
         if self.quick:
             return self._perceive_quick(now, feature), face
+        if self.table_mode:
+            return self._perceive_table(now, feature), face
         return self.classifier.predict(feature), face
+
+    def _perceive_table(self, now: float, feature):
+        """Which learned point the gaze ray is on. As in quick mode the eyes
+        must come back to the screen after every change of screen before a
+        look counts, so the look that raised a question cannot answer it."""
+        self._feature = feature
+        label = self.ray.predict(feature)
+        state = self.session.state
+        if state != self._q_state:
+            self._q_state, self._q_centred = state, False
+        if feature is None:
+            return None
+        if label == REST:
+            self._q_centred = True
+            return REST
+        if not self._q_centred:
+            return None
+        off = self.ray.offset_from(REST, feature)  # (left, up) in degrees from the screen
+        answer = self.cfg.ray_answer_deg
+        if state == "idle":
+            if label is not None and label in self.session.zones:
+                return label
+            # A look well above the screen, at nothing learned, opens the menu.
+            if off is not None and off[1] >= 2 * answer and abs(off[0]) < 2 * answer:
+                return NO
+            return None
+        if state in ("prompt", "menu") and off is not None:
+            if off[0] >= answer:
+                return YES
+            if off[0] <= -answer:
+                return NO
+        return None
 
     def _perceive_quick(self, now: float, feature):
         """Direction -> the label the session understands. What a direction
@@ -272,6 +400,24 @@ class App:
 
     def _finish_calibration(self, now: float) -> None:
         self.session.reset(now)
+        if self.table_mode:
+            target, self._teaching = self._teaching, None
+            if self.calibrator.error or target is None:
+                return
+            try:
+                frames = self.calibrator.X
+                distance = None
+                if target == REST:
+                    # The screen is by the camera, so it is as far as the head is.
+                    origins = [r[0] for r in (self.ray.ray(f) for f in frames) if r is not None]
+                    if origins:
+                        distance = float(sum(float((o ** 2).sum()) ** 0.5 for o in origins) / len(origins))
+                self.ray.learn(target, frames, distance)
+                self.self_check[target] = self.ray.self_check({target: frames})[target]
+                self.ray.save(self._ray_path)
+            except (ValueError, OSError) as exc:
+                self.calibrator.error = f"Could not learn that look: {exc}"
+            return
         if self.quick:
             if self.calibrator.error:
                 self._greet_after = now + self.cfg.greet_retry_s  # try again shortly
@@ -300,6 +446,18 @@ class App:
         if self._want_calibration:
             self._want_calibration = False
             self.calibrator.start(now)
+        if self.table_mode:
+            if self._table_dirty:
+                self._table_dirty = False
+                self._apply_table()
+            if self._want_teach and not self.calibrator.active:
+                target, self._want_teach = self._want_teach, None
+                label = next((t["label"] for t in self.table.targets if t["id"] == target), target)
+                what = "the screen" if target == REST else "the " + label
+                self.calibrator = Calibrator([(target, f"Look at {what}")], self.cfg.teach_settle_s,
+                                             self.cfg.teach_record_s, passes=1)
+                self._teaching = target
+                self.calibrator.start(now)
         if self.scene is not None and self.scene.version != self._scene_version:
             self._scene_version = self.scene.version
             if self.quick:
@@ -308,8 +466,12 @@ class App:
                 self.session.set_overrides(self.scene.overrides())
         label, face = self._perceive(now)
         self._last = (label, face)
-        ready = self.simulate or (self.reader.centre is not None if self.quick
-                                  else self.classifier.fitted)
+        if self.table_mode:
+            ready = self.simulate or (REST in self.ray.points
+                                      and any(z in self.ray.points for z in self.session.zones))
+        else:
+            ready = self.simulate or (self.reader.centre is not None if self.quick
+                                      else self.classifier.fitted)
         if self.calibrator.active or not ready:
             self.session.mark_face(now, face)
         else:
@@ -323,6 +485,7 @@ class App:
             "zones": [{"id": zid, "label": self.session.zone(zid).label}
                       for zid in self.session.zones],
             "scene": None if self.scene is None else self.scene.snapshot(),
+            "table": self._table_snapshot(ready) if self.table_mode else None,
             "session": self.session.snapshot(now),
             "calibration": self.calibrator.snapshot(now),
             "calibrated": ready,
@@ -340,7 +503,7 @@ class App:
                 "nurse_screens": self.hub.count("nurse"),
                 "simulate": self.simulate,
                 "answer_mode": self.cfg.answer_mode,
-                "gaze_mode": "simulate" if self.simulate else ("quick" if self.quick else "trained"),
+                "gaze_mode": "simulate" if self.simulate else ("quick" if self.quick else "table" if self.table_mode else "trained"),
                 "sides": self._sides if self.quick and not self.simulate else None,
                 "gaze_meter": self.reader.last() if self.quick and not self.simulate else None,
                 "preview": self._preview_on(),
@@ -350,6 +513,18 @@ class App:
                 "gaze_ok": self._gaze_ok,
             },
         })
+
+    def _table_snapshot(self, ready: bool) -> dict:
+        snap = self.table.snapshot()
+        snap.update({
+            "needs": sorted(self._needs),
+            "learned": {t: self.ray.spread.get(t) for t in self.ray.points},
+            "errors": self.ray.last(),
+            "gaze_uv": None if self.simulate else self.ray.project(self._feature, self.table.centres()),
+            "teaching": self._teaching,
+            "ready": ready,
+        })
+        return snap
 
     def run(self) -> None:
         if self.sensor is not None:
@@ -367,6 +542,22 @@ class App:
             except Exception:  # one bad frame must not stop the device
                 traceback.print_exc()
             time.sleep(max(0.0, period - (time.monotonic() - now)))
+
+
+def _open_detector(model_path: str):
+    """The object detector for the table photo, or None (the nurse then
+    draws the spots by hand)."""
+    if not os.path.exists(model_path):
+        print("No object detector model; spots on the table photo are drawn by hand.")
+        return None
+    try:
+        from .detector import SceneDetector
+        detector = SceneDetector(model_path)
+    except Exception as exc:
+        print(f"Object detection is off: {exc}")
+        return None
+    print(f"Object detection is on ({detector.backend}) for the table photo.")
+    return detector
 
 
 def _open_scene(model_path: str, zones: dict, needs: dict, quick: bool = False):
@@ -415,8 +606,9 @@ def main() -> None:
     p.add_argument("--camera", type=int, default=0, help="OpenCV camera index")
     p.add_argument("--frame-file", help="read frames from a JPEG written by a capture process")
     p.add_argument("--model", default=os.path.join(root, "models", "face_landmarker.task"))
-    p.add_argument("--gaze-mode", choices=("quick", "trained"), default="quick",
-                   help="quick: one look at the centre, objects left and right of the screen; "
+    p.add_argument("--gaze-mode", choices=("table", "quick", "trained"), default="table",
+                   help="table: one photo of the table, one look per object (default); "
+                        "quick: one look at the centre, objects left and right of the screen; "
                         "trained: the guided routine, objects anywhere")
     p.add_argument("--zones", default=os.path.join(root, "config", "zones.json"))
     p.add_argument("--scene-model", default=os.path.join(root, "models", "scene.onnx"),
@@ -450,10 +642,15 @@ def main() -> None:
 
     needs = load_needs(args.zones)
     quick = cfg.gaze_mode == "quick" and cfg.answer_mode == "horizontal" and not args.simulate
-    scene = _open_scene(args.scene_model, zones, needs, quick)
+    table = cfg.gaze_mode == "table" and cfg.answer_mode == "horizontal"
+    scene = detector = None
+    if table:
+        detector = _open_detector(args.scene_model)
+    else:
+        scene = _open_scene(args.scene_model, zones, needs, quick)
     hub = Hub()
     app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate, scene,
-              load_menu(args.zones), needs=needs)
+              load_menu(args.zones), needs=needs, detector=detector)
     serve(hub, app, args.host, args.port)
     print(f"Patient screen: http://localhost:{args.port}/")
     print(f"Nurse station:  http://localhost:{args.port}/nurse")

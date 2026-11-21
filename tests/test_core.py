@@ -683,7 +683,7 @@ def quick_app(tmp_path):
     root = os.path.dirname(os.path.dirname(__file__))
     path = os.path.join(root, "config", "zones.json")
     extractor = _FakeExtractor()
-    cfg = Config(ema_alpha=1.0)   # no smoothing, so each frame is what the test set
+    cfg = Config(ema_alpha=1.0, gaze_mode="quick")   # no smoothing, so each frame is what the test set
     app = App(cfg, load_zones(path), str(tmp_path), Hub(), _FakeCamera(), extractor,
               menu=load_menu(path))
     clock = Clock()
