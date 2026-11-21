@@ -9,3 +9,4 @@ test-output.xml
 models/*.pt
 models/*.onnx
 weights/
+.claude/
