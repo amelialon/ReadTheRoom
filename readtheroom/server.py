@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
-PAGES = {"/": "patient.html", "/nurse": "nurse.html"}
+PAGES = {"/": "patient.html", "/nurse": "nurse.html", "/room": "room.html"}
 MAX_BODY = 10_000
 MAX_PHOTO = 4_000_000
 
@@ -80,6 +80,12 @@ def make_handler(hub: Hub, app):
             if url.path in PAGES:
                 with open(os.path.join(STATIC, PAGES[url.path]), "rb") as f:
                     self._send(200, f.read(), "text/html; charset=utf-8")
+            elif url.path == "/scene.jpg":
+                jpeg = app.scene_photo()
+                if jpeg is None:
+                    self._json(404, {"error": "no scene photo yet"})
+                else:
+                    self._send(200, jpeg, "image/jpeg")
             elif url.path == "/preview.jpg":
                 jpeg = app.preview_jpeg()
                 if jpeg is None:

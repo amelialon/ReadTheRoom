@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room view · Read the Room</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: #0e1217; color: #e9eef3; font-family: system-ui, sans-serif;
+         display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: baseline; gap: 14px; padding: 16px 26px 8px; }
+  header h1 { font-size: 20px; font-weight: 600; margin: 0 auto 0 0; letter-spacing: .01em; }
+  header span { font-size: 14px; color: #8a97a6; }
+  #dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e0655c;
+         margin-right: 6px; }
+  #dot.ok { background: #5fd3a6; }
+  #wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+          padding: 8px 26px; }
+  #stage { position: relative; max-width: 100%; max-height: 100%; border-radius: 16px;
+           overflow: hidden; background: #161c24; display: none; }
+  #photo { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(.92); }
+  .spot { position: absolute; border: 2px solid rgba(255,255,255,.75); border-radius: 14px;
+          transition: left .5s, top .5s, width .5s, height .5s, border-color .25s, box-shadow .25s;
+          overflow: hidden; }
+  .spot .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+                background: rgba(95,211,166,.28); transition: height .12s linear; }
+  .spot.other { border: 1.5px dashed rgba(255,255,255,.35); }
+  .spot.looking { border-color: #5fd3a6; box-shadow: 0 0 0 3px rgba(95,211,166,.25), 0 0 28px rgba(95,211,166,.45); }
+  .spot.asked { border-color: #f3c54e; box-shadow: 0 0 0 3px rgba(243,197,78,.25), 0 0 28px rgba(243,197,78,.4); }
+  .tag { position: absolute; transform: translateY(-100%); margin-top: -6px; padding: 4px 11px;
+         border-radius: 999px; background: rgba(14,18,23,.82); color: #fff; font-size: 15px;
+         font-weight: 600; white-space: nowrap; transition: left .5s, top .5s, background .25s, color .25s; }
+  .tag.other { font-weight: 400; color: #c3ccd6; font-size: 13px; }
+  .tag.looking { background: #5fd3a6; color: #08261b; }
+  .tag.asked { background: #f3c54e; color: #2b2100; }
+  #tiles { display: none; gap: 18px; flex-wrap: wrap; justify-content: center; }
+  .tile { position: relative; width: 210px; height: 150px; border-radius: 16px; background: #161c24;
+          border: 2px solid #2a3440; display: flex; align-items: center; justify-content: center;
+          font-size: 20px; font-weight: 600; text-align: center; padding: 12px; overflow: hidden;
+          transition: border-color .25s, box-shadow .25s; }
+  .tile .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+                background: rgba(95,211,166,.22); transition: height .12s linear; }
+  .tile span { position: relative; }
+  .tile.looking { border-color: #5fd3a6; box-shadow: 0 0 28px rgba(95,211,166,.35); }
+  .tile.asked { border-color: #f3c54e; box-shadow: 0 0 28px rgba(243,197,78,.3); }
+  footer { padding: 10px 26px 22px; text-align: center; min-height: 118px; }
+  #line { font-size: clamp(22px, 3.2vw, 40px); font-weight: 700; line-height: 1.2; }
+  #sub { margin-top: 8px; font-size: 16px; color: #8a97a6; min-height: 1.3em; }
+  #line.asked { color: #f3c54e; } #line.sent { color: #5fd3a6; }
+  @media (prefers-reduced-motion: reduce) { .spot, .tag, .tile, .fill { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Read the Room</h1>
+  <span><span id="dot"></span><span id="status">Connecting…</span></span>
+</header>
+<div id="wrap">
+  <div id="stage"><img id="photo" alt="The room as the scene camera sees it"></div>
+  <div id="tiles"></div>
+</div>
+<footer>
+  <div id="line"></div>
+  <div id="sub"></div>
+</footer>
+<script>
+const $ = id => document.getElementById(id);
+const els = new Map();     // key -> {box, tag} on the photo
+const tiles = new Map();   // zone id -> tile
+let photoId = -1, lastMessage = 0;
+
+function overlapping(a, b) {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w <= 0 || h <= 0) return 0;
+  const inter = w * h, union = (a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter;
+  return inter / union;
+}
+
+function place(key, box, size, label, cls, progress) {
+  let e = els.get(key);
+  if (!e) {
+    e = {box: document.createElement('div'), tag: document.createElement('div')};
+    e.fill = document.createElement('div'); e.fill.className = 'fill';
+    e.box.appendChild(e.fill);
+    $('stage').append(e.box, e.tag);
+    els.set(key, e);
+  }
+  const [w, h] = size, [x1, y1, x2, y2] = box;
+  e.box.className = 'spot ' + cls; e.tag.className = 'tag ' + cls;
+  e.box.style.left = (x1 / w * 100) + '%'; e.box.style.top = (y1 / h * 100) + '%';
+  e.box.style.width = ((x2 - x1) / w * 100) + '%'; e.box.style.height = ((y2 - y1) / h * 100) + '%';
+  e.tag.style.left = (x1 / w * 100) + '%'; e.tag.style.top = Math.max(y1 / h * 100, 7) + '%';
+  e.tag.textContent = label;
+  e.fill.style.height = (progress * 100) + '%';
+}
+
+function render(s) {
+  const ses = s.session, sc = s.scene, st = s.status;
+  $('title').textContent = s.bed + ' · Read the Room';
+  $('dot').className = st.face_ok ? 'ok' : '';
+  $('status').textContent = st.face_ok ? 'Following the patient\'s gaze' : 'Patient not in view';
+
+  const asked = ses.state === 'prompt' ? ses.zone : null;
+  const looking = ses.state === 'idle' ? ses.leader : null;
+  const cls = id => id === asked ? 'asked' : id === looking ? 'looking' : '';
+  const prog = id => id === looking ? ses.progress : 0;
+  const names = Object.fromEntries(s.zones.map(z => [z.id, z.label]));
+
+  const located = sc && sc.size ? sc.spots.filter(p => p.box) : [];
+  const usePhoto = located.length > 0;
+  $('stage').style.display = usePhoto ? 'block' : 'none';
+  $('tiles').style.display = usePhoto ? 'none' : 'flex';
+
+  if (usePhoto) {
+    const [w, h] = sc.size;
+    const wrap = $('wrap').getBoundingClientRect();
+    const scale = Math.min((wrap.width - 52) / w, (wrap.height - 16) / h);
+    $('stage').style.width = (w * scale) + 'px'; $('stage').style.height = (h * scale) + 'px';
+    if (sc.photo_id !== photoId) { photoId = sc.photo_id; $('photo').src = '/scene.jpg?id=' + photoId; }
+    const live = new Set();
+    located.forEach(p => {
+      live.add('z:' + p.zone);
+      place('z:' + p.zone, p.box, sc.size, names[p.zone] || p.now, cls(p.zone), prog(p.zone));
+    });
+    // Other things the scan recognised, shown faintly. Skip whole-picture boxes.
+    sc.found.forEach((f, i) => {
+      const area = (f.box[2] - f.box[0]) * (f.box[3] - f.box[1]) / (w * h);
+      if (area > 0.6 || located.some(p => overlapping(p.box, f.box) > 0.2)) return;
+      live.add('o:' + f.label + i);
+      place('o:' + f.label + i, f.box, sc.size, f.label, 'other', 0);
+    });
+    for (const [key, e] of els) if (!live.has(key)) { e.box.remove(); e.tag.remove(); els.delete(key); }
+  } else {
+    s.zones.forEach(z => {
+      let t = tiles.get(z.id);
+      if (!t) {
+        t = document.createElement('div');
+        t.innerHTML = '<div class="fill"></div><span></span>';
+        $('tiles').appendChild(t); tiles.set(z.id, t);
+      }
+      t.className = 'tile ' + cls(z.id);
+      t.querySelector('span').textContent = z.label;
+      t.querySelector('.fill').style.height = (prog(z.id) * 100) + '%';
+    });
+  }
+
+  let line = '', sub = '', lineCls = '';
+  const open = s.alerts.find(a => a.state !== 'acked');
+  if (ses.state === 'prompt') {
+    line = ses.question; lineCls = 'asked';
+    sub = 'Waiting for the patient to answer with their eyes';
+  } else if (ses.state === 'menu') {
+    line = ses.menu.label; lineCls = 'asked';
+    sub = 'Choosing from the menu: ' + (ses.menu.index + 1) + ' of ' + ses.menu.count;
+  } else if (ses.state === 'sent') {
+    line = 'Sent to the nurse'; lineCls = 'sent';
+    sub = s.alerts.length ? s.alerts[0].message : '';
+  } else if (looking && names[looking]) {
+    line = 'Looking at the ' + names[looking];
+  } else if (!s.calibrated) {
+    line = 'Waiting for calibration';
+  } else {
+    line = open ? open.message : 'Watching';
+    sub = open ? (open.state === 'escalated' ? 'Still waiting for a nurse' : 'Nurse has been called') : '';
+  }
+  $('line').textContent = line; $('line').className = lineCls;
+  $('sub').textContent = sub;
+}
+
+function offline(text) {
+  $('dot').className = ''; $('status').textContent = text;
+}
+const es = new EventSource('/events?role=patient');
+es.onmessage = e => { lastMessage = Date.now(); render(JSON.parse(e.data)); };
+es.onerror = () => offline('Lost connection to the device');
+setInterval(() => { if (lastMessage && Date.now() - lastMessage > 3000) offline('Device not responding'); }, 1000);
+</script>
+</body>
+</html>

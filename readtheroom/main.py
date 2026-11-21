@@ -102,8 +102,9 @@ class App:
         return None if box is None else round(box[2] - box[0], 3)
 
     def preview_jpeg(self):
-        """Small mirrored picture of what the camera sees, with the face and
-        eyes marked. None when the preview is off or there is no picture."""
+        """Small mirrored picture of what the camera sees. Nothing is drawn
+        on it: the page adds a soft frame around the face. None when the
+        preview is off or there is no picture."""
         frame = self._frame
         if frame is None or not self._preview_on():
             return None
@@ -112,17 +113,19 @@ class App:
         h, w = frame.shape[:2]
         scale = 640 / w
         img = cv2.resize(frame, (640, round(h * scale)))
-        ph, pw = img.shape[:2]
-        box, eyes = self.extractor.last_box, self.extractor.last_eyes
-        colour = (80, 200, 80) if self._gaze_ok else (60, 60, 230)
-        if box is not None:
-            cv2.rectangle(img, (int(box[0] * pw), int(box[1] * ph)),
-                          (int(box[2] * pw), int(box[3] * ph)), colour, 2)
-            for x, y in eyes or []:
-                cv2.circle(img, (int(x * pw), int(y * ph)), 4, (0, 220, 255), -1)
         img = cv2.flip(img, 1)
         ok, jpeg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 70])
         return jpeg.tobytes() if ok else None
+
+    def _face_box(self):
+        """Face position in the mirrored preview, as fractions of the picture."""
+        box = getattr(self.extractor, "last_box", None)
+        if box is None or not self._preview_on():
+            return None
+        return [round(v, 4) for v in (1 - box[2], box[1], 1 - box[0], box[3])]
+
+    def scene_photo(self):
+        return None if self.scene is None else self.scene.photo()
 
     def set_debug_gaze(self, label) -> None:
         self._debug_gaze = label if isinstance(label, str) else None
@@ -217,6 +220,7 @@ class App:
                 "answer_mode": self.cfg.answer_mode,
                 "preview": self._preview_on(),
                 "face_width": self._face_width(),
+                "face_box": self._face_box(),
                 "brightness": None if self._frame is None else round(float(self._frame[::8, ::8].mean())),
                 "gaze_ok": self._gaze_ok,
             },

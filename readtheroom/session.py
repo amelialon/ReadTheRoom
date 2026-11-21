@@ -224,6 +224,8 @@ class Session:
         return {
             "state": self.state,
             "question": self.prompt["question"] if self.prompt else None,
+            # Which zone the open question is about (None for room or menu prompts).
+            "zone": self.prompt["key"] if self.prompt and self.prompt["key"] in self.zones else None,
             "gaze": self.last_label,
             "leader": leader,
             "progress": round(progress, 3),

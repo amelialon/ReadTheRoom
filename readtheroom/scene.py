@@ -86,6 +86,7 @@ class SceneTracker:
     def status(self) -> list:
         return [{"zone": zid, "expected": zone.detect,
                  "located": zid in self._spot,
+                 "box": self._spot.get(zid),
                  "now": self._current.get(zid),
                  "seen": self._seen.get(zid, False)}
                 for zid, zone in self.zones.items()]
@@ -111,6 +112,9 @@ class SceneWorker:
         self._at: float | None = None
         self._ms: float | None = None
         self._error: str | None = None
+        self._photo: bytes | None = None   # last photo that was read successfully
+        self._photo_id = 0
+        self._size = None                  # (width, height) of that photo
         threading.Thread(target=self._run, daemon=True).start()
 
     def submit(self, jpeg: bytes) -> None:
@@ -136,12 +140,13 @@ class SceneWorker:
         import numpy as np
 
         started = self._mono()
-        found, error = [], None
+        found, error, size = [], None, None
         try:
             frame = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
             if frame is None:
                 error = "The scene photo could not be read."
             else:
+                size = (int(frame.shape[1]), int(frame.shape[0]))
                 found = self._detector.detect(frame)
         except Exception as exc:  # a bad photo must not stop the worker
             error = f"Object detection failed: {exc}"
@@ -149,6 +154,8 @@ class SceneWorker:
             if error is None:
                 self._tracker.update(found)
                 self._found = found
+                self._photo, self._size = jpeg, size
+                self._photo_id += 1
             self._error = error
             self._at = self._mono()
             self._ms = round((self._at - started) * 1000)
@@ -158,9 +165,16 @@ class SceneWorker:
         with self._lock:
             return self._tracker.overrides()
 
+    def photo(self):
+        """The last scene photo, for the room view. It shows the objects, not the patient."""
+        with self._lock:
+            return self._photo
+
     def snapshot(self) -> dict:
         with self._lock:
             return {"age_s": None if self._at is None else round(self._mono() - self._at, 1),
                     "ms": self._ms, "error": self._error,
-                    "found": [{"label": d["label"], "score": d["score"]} for d in self._found],
+                    "photo_id": self._photo_id, "size": self._size,
+                    "found": [{"label": d["label"], "score": d["score"], "box": d["box"]}
+                              for d in self._found],
                     "spots": self._tracker.status()}

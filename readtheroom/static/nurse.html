@@ -52,9 +52,13 @@
   <h2>Setup</h2>
   <button id="calibrate">Start calibration</button>
   <button class="light" id="previewBtn">Show camera view</button>
+  <a href="/room" target="_blank" style="margin-left:8px">Open room view</a>
   <div id="check"></div>
   <div id="previewBox" style="display:none">
-    <img id="preview" alt="Camera view" style="max-width:100%;border-radius:8px;margin-top:10px">
+    <div style="position:relative;display:inline-block;margin-top:10px;line-height:0">
+      <img id="preview" alt="Camera view" style="max-width:100%;border-radius:12px">
+      <div id="faceFrame" style="position:absolute;display:none;border:2px solid #7fd6c2;border-radius:28%;box-shadow:0 0 0 1px rgba(0,0,0,.15);transition:all .2s ease-out;pointer-events:none"></div>
+    </div>
     <div id="previewHelp" style="font-size:14px;margin-top:6px"></div>
   </div>
 </section>
@@ -146,6 +150,14 @@ function render(s) {
   $('previewBtn').style.display = st.simulate ? 'none' : '';
   $('previewBtn').textContent = st.preview ? 'Hide camera view' : 'Show camera view';
   $('previewBox').style.display = st.preview ? 'block' : 'none';
+  const ff = $('faceFrame');
+  if (st.preview && st.face_box) {
+    const [x1, y1, x2, y2] = st.face_box;
+    ff.style.display = 'block';
+    ff.style.left = (x1 * 100) + '%'; ff.style.top = (y1 * 100) + '%';
+    ff.style.width = ((x2 - x1) * 100) + '%'; ff.style.height = ((y2 - y1) * 100) + '%';
+    ff.style.borderColor = st.gaze_ok ? '#7fd6c2' : '#f0b45a';
+  } else ff.style.display = 'none';
   if (st.preview) {
     const tips = [];
     if (st.face_width == null) tips.push('No face found: aim the camera at the patient.');
@@ -153,7 +165,7 @@ function render(s) {
       const pct = Math.round(st.face_width * 100);
       tips.push('Face fills ' + pct + '% of the width'
         + (pct < 22 ? ': too far, move the camera closer.' : pct > 45 ? ': too close, move it back.' : ': good.'));
-      tips.push(st.gaze_ok ? 'Eyes readable (green box).' : 'Eyes not readable (red box).');
+      tips.push(st.gaze_ok ? 'Eyes readable.' : 'Eyes not readable (amber frame).');
     }
     if (st.brightness != null) tips.push('Brightness ' + st.brightness + '/255'
       + (st.brightness < 60 ? ': too dark, add light on the face.' : st.brightness < 100 ? ': a bit dim.' : ': good.'));
