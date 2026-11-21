@@ -34,6 +34,16 @@
   .tag.other { font-weight: 400; color: #c3ccd6; font-size: 13px; }
   .tag.looking { background: #5fd3a6; color: #08261b; }
   .tag.asked { background: #f3c54e; color: #2b2100; }
+  .spot.calib, .tile.calib { border-color: #8fb8ff; animation: pulse 1.1s ease-in-out infinite; }
+  .spot.calib .fill, .tile.calib .fill { background: rgba(143,184,255,.3); }
+  .tag.calib { background: #8fb8ff; color: #0a1c3a; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(143,184,255,.25), 0 0 18px rgba(143,184,255,.35); }
+    50% { box-shadow: 0 0 0 7px rgba(143,184,255,.35), 0 0 44px rgba(143,184,255,.7); }
+  }
+  #steps { display: none; gap: 6px; justify-content: center; margin-top: 12px; }
+  #steps i { width: 26px; height: 5px; border-radius: 3px; background: #2a3440; }
+  #steps i.done { background: #8fb8ff; } #steps i.now { background: #fff; }
   #tiles { display: none; gap: 18px; flex-wrap: wrap; justify-content: center; }
   .tile { position: relative; width: 210px; height: 150px; border-radius: 16px; background: #161c24;
           border: 2px solid #2a3440; display: flex; align-items: center; justify-content: center;
@@ -47,8 +57,8 @@
   footer { padding: 10px 26px 22px; text-align: center; min-height: 118px; }
   #line { font-size: clamp(22px, 3.2vw, 40px); font-weight: 700; line-height: 1.2; }
   #sub { margin-top: 8px; font-size: 16px; color: #8a97a6; min-height: 1.3em; }
-  #line.asked { color: #f3c54e; } #line.sent { color: #5fd3a6; }
-  @media (prefers-reduced-motion: reduce) { .spot, .tag, .tile, .fill { transition: none !important; } }
+  #line.asked { color: #f3c54e; } #line.sent { color: #5fd3a6; } #line.calib { color: #8fb8ff; }
+  @media (prefers-reduced-motion: reduce) { .spot, .tag, .tile, .fill { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
@@ -63,12 +73,13 @@
 <footer>
   <div id="line"></div>
   <div id="sub"></div>
+  <div id="steps"></div>
 </footer>
 <script>
 const $ = id => document.getElementById(id);
 const els = new Map();     // key -> {box, tag} on the photo
 const tiles = new Map();   // zone id -> tile
-let photoId = -1, lastMessage = 0;
+let photoId = -1, lastMessage = 0, calWasActive = false, calEndedAt = 0;
 
 function overlapping(a, b) {
   const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
@@ -101,10 +112,14 @@ function render(s) {
   $('dot').className = st.face_ok ? 'ok' : '';
   $('status').textContent = st.face_ok ? 'Following the patient\'s gaze' : 'Patient not in view';
 
-  const asked = ses.state === 'prompt' ? ses.zone : null;
-  const looking = ses.state === 'idle' ? ses.leader : null;
-  const cls = id => id === asked ? 'asked' : id === looking ? 'looking' : '';
-  const prog = id => id === looking ? ses.progress : 0;
+  const cal = s.calibration;
+  const learning = cal.active ? cal.target : null;   // the target being learned right now
+  const asked = !cal.active && ses.state === 'prompt' ? ses.zone : null;
+  const looking = !cal.active && ses.state === 'idle' ? ses.leader : null;
+  const cls = id => id === learning ? 'calib' : id === asked ? 'asked' : id === looking ? 'looking' : '';
+  const prog = id => id === learning ? (cal.recording ? cal.progress : 0) : id === looking ? ses.progress : 0;
+  if (calWasActive && !cal.active) calEndedAt = Date.now();
+  calWasActive = cal.active;
   const names = Object.fromEntries(s.zones.map(z => [z.id, z.label]));
 
   const located = sc && sc.size ? sc.spots.filter(p => p.box) : [];
@@ -147,7 +162,25 @@ function render(s) {
 
   let line = '', sub = '', lineCls = '';
   const open = s.alerts.find(a => a.state !== 'acked');
-  if (ses.state === 'prompt') {
+  const steps = $('steps');
+  steps.style.display = cal.active ? 'flex' : 'none';
+  if (cal.active) {
+    if (steps.children.length !== cal.steps)
+      steps.replaceChildren(...Array.from({length: cal.steps}, () => document.createElement('i')));
+    [...steps.children].forEach((el, i) => { el.className = i + 1 < cal.step ? 'done' : i + 1 === cal.step ? 'now' : ''; });
+  }
+  if (cal.active) {
+    line = cal.instruction; lineCls = 'calib';
+    sub = (cal.recording ? 'Learning what that looks like' : 'Getting ready')
+      + ' · step ' + cal.step + ' of ' + cal.steps;
+  } else if (cal.error && Date.now() - calEndedAt < 15000) {
+    line = 'Calibration did not finish'; sub = cal.error;
+  } else if (Date.now() - calEndedAt < 6000 && s.calibrated) {
+    const weak = Object.entries(s.self_check).filter(([k, v]) => v < 0.7).map(([k]) => names[k] || k);
+    line = weak.length ? 'Calibrated, with a weak spot' : 'Calibrated'; lineCls = weak.length ? 'asked' : 'sent';
+    sub = weak.length ? 'Hard to tell apart: ' + weak.join(', ') + '. Move it further from the others and try again.'
+      : 'The device has learned where each object is.';
+  } else if (ses.state === 'prompt') {
     line = ses.question; lineCls = 'asked';
     sub = 'Waiting for the patient to answer with their eyes';
   } else if (ses.state === 'menu') {

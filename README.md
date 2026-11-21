@@ -91,7 +91,7 @@ The words in `zones.json` must be in the exported model's word list; the app say
 
 ## Room view (for presenting)
 
-`http://DEVICE:8000/room` shows the room as the scene camera sees it, with a labelled box around each object. The box of the object the patient is looking at lights up and fills as they hold their gaze, turns amber while its question is open, and the question and the request sent appear underneath. Without a scene camera it shows the objects as tiles that light up the same way. It shows the objects, never the patient's face.
+`http://DEVICE:8000/room` shows the room as the scene camera sees it, with a labelled box around each object. The box of the object the patient is looking at lights up and fills as they hold their gaze, turns amber while its question is open, and the question and the request sent appear underneath. Without a scene camera it shows the objects as tiles that light up the same way. During calibration it follows along: the object being learned pulses blue, the instruction is shown underneath, and a row of bars shows how far through it is. It shows the objects, never the patient's face.
 
 ## Keeping it running
 
