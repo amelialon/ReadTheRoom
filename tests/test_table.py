@@ -146,3 +146,21 @@ def test_simulation_uses_the_targets(tmp_path):
             app.tick(clock.t)
     assert app.session.state == "prompt"
     assert app.request_teach(REST) is False    # nothing to learn from in simulation
+
+
+def test_teach_frames_are_saved_and_tunable(table_app, tmp_path, capsys):
+    from readtheroom import tune_ray
+    app, run = table_app
+    app.set_table_photo(TINY_JPEG)
+    app.set_table_targets([{"id": REST, "box": [0, 1, 1, 2]}, {"need": "water bottle", "box": [0, 0, 1, 1]}])
+    for target, where in ((REST, SCREEN), ("t:water-bottle", BOTTLE), (REST, SCREEN), ("t:water-bottle", BOTTLE)):
+        app.request_teach(target)
+        run(frame([0, 0, -50], 0.2 if target == REST else 0.0, 0, where, app.ray), 3.0)
+    files = sorted(str(p) for p in tmp_path.glob("teach-*.json"))
+    assert len(files) == 4
+    records = [json.loads(open(f).read()) for f in files]
+    assert {r["target"] for r in records} == {REST, "t:water-bottle"}
+    assert all(len(r["frames"][0]) == 29 for r in records)
+    tune_ray.main(files)
+    out = capsys.readouterr().out
+    assert "Recommended Config values" in out and "fair test" in out

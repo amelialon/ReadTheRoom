@@ -415,6 +415,7 @@ class App:
                 self.ray.learn(target, frames, distance)
                 self.self_check[target] = self.ray.self_check({target: frames})[target]
                 self.ray.save(self._ray_path)
+                self._save_teach(target, frames)
             except (ValueError, OSError) as exc:
                 self.calibrator.error = f"Could not learn that look: {exc}"
             return
@@ -513,6 +514,26 @@ class App:
                 "gaze_ok": self._gaze_ok,
             },
         })
+
+    def _save_teach(self, target: str, frames) -> None:
+        """Keep the raw frames of every taught look, so the eye gains can be
+        checked against this person and camera (python -m readtheroom.tune_ray)."""
+        import json
+        stem = os.path.join(os.path.dirname(self._ray_path), "teach-" + time.strftime("%H%M%S"))
+        path, n = stem + ".json", 2
+        while os.path.exists(path):  # several teaches in one second
+            path, n = f"{stem}-{n}.json", n + 1
+        record = {"target": target, "label": next((t["label"] for t in self.table.targets if t["id"] == target), target),
+                  "time": time.time(), "bed": self.cfg.bed,
+                  "settings": {"eye_gain": self.ray.eye_gain, "eye_clamp": self.ray.eye_clamp,
+                               "iris_gain": self.ray.iris_gain, "distance_cm": self.ray.distance_cm},
+                  "point": self.ray.points.get(target),
+                  "frames": [[round(float(v), 5) for v in f] for f in frames if f is not None]}
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(record, f)
+        except OSError:
+            pass
 
     def _table_snapshot(self, ready: bool) -> dict:
         snap = self.table.snapshot()
