@@ -10,7 +10,7 @@ Needs only Python 3 and NumPy.
 python3 -m readtheroom --simulate
 ```
 
-Open `http://localhost:8000/` (patient screen) and `http://localhost:8000/nurse` (nurse station) in two windows. The nurse page has buttons that stand in for where the patient is looking: press "water bottle", wait for the question, press "YES".
+Open `http://localhost:8000/` (patient screen) and `http://localhost:8000/nurse` (caregiver side) in two windows. The caregiver side asks who is signing in (Staff or Family; nothing is checked, the choice stays in that browser), then shows the patient list; `http://localhost:8000/nurse?as=staff` skips the question. Open Bed 4 for the caregiver view: the room camera on the left (flip to the patient camera), requests on the right with a tick to say you are on your way, the room temperature bottom-left, and the next bed bottom-right. The menu (top-left) has the patient list, analytics, the device sheet (calibration, camera check, room scan) and the Hospital/Family switch. In simulation the device sheet has buttons that stand in for where the patient is looking: press "water bottle", wait for the question, press "YES".
 
 ### Needs with no object: the MORE menu
 
@@ -58,7 +58,7 @@ Then run the app:
 .venv/bin/python -m readtheroom --camera 0
 ```
 
-To position the camera, press "Show camera view" on the nurse page: it shows a small mirrored picture with the face and eyes marked, and says whether the face is too far, too close or too dark. The view is off by default and switches itself off after 3 minutes.
+To position the camera, open the device sheet from the caregiver menu and press "Show the patient camera": it shows a small mirrored picture with the face and eyes marked, and says whether the face is too far, too close or too dark. The view is off by default and switches itself off after 3 minutes.
 
 Then press "Start calibration" and follow the instructions on the patient screen. Calibration is saved in `data/` and reused on the next start.
 

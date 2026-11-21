@@ -3,120 +3,392 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nurse station · Read the Room</title>
+<title>Caregiver · Read the Room</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="/theme.css">
 <style>
-  body { min-height: 100dvh; padding: 0 24px 60px; }
-  #page { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+  /* The caregiver side is one frame of frosted glass over the room itself:
+     the latest photo from the scene camera, blurred, sits behind everything,
+     with washes of sage and blush where there is no photo yet. */
+  :root { --drawer: 320ms; }
+  html, body { height: 100%; }
+  body { overflow: hidden; }
+  #backdrop { position: fixed; inset: 0; z-index: 0; overflow: hidden;
+    background:
+      radial-gradient(60% 50% at 12% 10%, rgba(184, 207, 179, .75), transparent 70%),
+      radial-gradient(50% 45% at 90% 20%, rgba(246, 226, 233, .9), transparent 70%),
+      radial-gradient(60% 60% at 70% 95%, rgba(132, 162, 130, .35), transparent 70%),
+      var(--ground); }
+  #bg { position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover; opacity: 0;
+        filter: blur(36px) saturate(.85); transition: opacity 1200ms var(--ease); }
+  #bg.on { opacity: .6; }
 
-  /* Header: a hairline, not a bar. */
-  header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 24px; padding: 44px 0 18px; border-bottom: 1px solid var(--edge); }
-  #bed { font-size: 34px; font-weight: 700; letter-spacing: -.04em; margin-right: auto; }
-  .chip { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; color: var(--ink-2); }
-  .chip::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--ink-3); }
-  .chip.good::before { background: var(--accent); }
-  .chip.bad { color: var(--danger); } .chip.bad::before { background: var(--danger); }
-  #perf { color: var(--ink-3); } #perf::before { display: none; }
+  .view { position: fixed; inset: 0; z-index: 1; display: none; }
+  .view.on { display: block; }
 
-  #banner { display: none; padding: 14px 20px; border-radius: var(--r-md); background: var(--danger-wash); color: var(--danger); font-weight: 600; }
-
-  /* Requests: hairline rows, the waiting time as a numeral on the left. */
-  .section-head { display: flex; align-items: baseline; gap: 14px; }
-  .section-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-deep); }
-  #alerts { display: flex; flex-direction: column; }
-  .alert { display: grid; grid-template-columns: 120px 1fr auto; gap: 24px; align-items: center; padding: 22px 20px; margin: 0 -20px;
-           border-bottom: 1px solid var(--edge); transition: background 240ms var(--ease), opacity 400ms var(--ease), transform 260ms var(--ease); }
-  @starting-style { .alert { opacity: 0; transform: translateY(8px); } }
-  .alert .time { font-size: 40px; font-weight: 700; letter-spacing: -.04em; line-height: 1; }
-  .alert .body { display: flex; flex-direction: column; gap: 4px; }
-  .alert .msg { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
-  .alert .meta { font-size: 14px; color: var(--ink-2); }
-  .alert.pending { background: var(--blush); }
-  .alert.escalated .time, .alert.escalated .meta { color: var(--danger); }
-  .alert.escalated .meta { font-weight: 600; }
-  .alert.acked { color: var(--ink-3); }
-  .alert.acked .time, .alert.acked .meta { color: var(--ink-3); }
-  .alert.acked .msg { font-weight: 600; }
-  .alert.acked .pill { display: none; }
-  #empty { padding: 28px 0; color: var(--ink-3); }
-
-  /* Device state in two columns under the list. */
-  #device { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
-  @media (max-width: 760px) { #device { grid-template-columns: 1fr; } .alert { grid-template-columns: 90px 1fr; } .alert .pill { grid-column: 2; justify-self: start; } }
-  .col { display: flex; flex-direction: column; gap: 12px; }
-  .note { font-size: 15px; color: var(--ink-2); line-height: 1.5; }
+  /* Small shared pieces. */
+  .ghost { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 44px; height: 44px; padding: 0 14px;
+           border-radius: 999px; border: 0; font: inherit; font-weight: 600; font-size: 14px; color: var(--ink); cursor: pointer;
+           background: rgba(255, 255, 255, .55); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 1px rgba(255, 255, 255, .6), 0 6px 18px -8px rgba(40, 42, 38, .25);
+           transition: transform 140ms var(--ease), background 200ms var(--ease); }
+  .ghost:active { transform: scale(.96); }
+  .ghost.round { width: 44px; padding: 0; }
+  .ghost .icon { width: 20px; height: 20px; }
+  @media (hover: hover) and (pointer: fine) { .ghost:hover { background: rgba(255, 255, 255, .8); } }
+  .ghost:focus-visible, .tick:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--accent-deep); }
   .quiet { font-size: 13px; color: var(--ink-3); line-height: 1.5; }
-  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-  a { color: var(--ink-2); }
-  #previewBox { display: none; }
-  #previewWrap { position: relative; display: inline-block; line-height: 0; border-radius: var(--r-md); overflow: hidden; box-shadow: 0 0 0 1px var(--edge); }
-  #preview { max-width: 100%; display: block; }
+  .note { font-size: 15px; color: var(--ink-2); line-height: 1.5; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+  .chip::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--ink-3); }
+  .chip.good { color: var(--accent-deep); } .chip.good::before { background: var(--accent); }
+  .chip.bad { color: var(--danger); } .chip.bad::before { background: var(--danger); }
+
+  /* Hamburger: two lines that rotate into a cross. */
+  #burger { position: relative; }
+  #burger i { position: absolute; left: 13px; width: 18px; height: 2px; border-radius: 2px; background: var(--ink);
+              transition: transform 260ms var(--ease); }
+  #burger i:first-child { transform: translateY(-4px); } #burger i:last-child { transform: translateY(4px); }
+  body.menu #burger i:first-child { transform: rotate(45deg); } body.menu #burger i:last-child { transform: rotate(-45deg); }
+
+  /* The drawer and the scrim behind it. */
+  #scrim { position: fixed; inset: 0; z-index: 5; background: rgba(40, 42, 38, .18); opacity: 0; pointer-events: none;
+           transition: opacity var(--drawer) var(--ease); }
+  body.menu #scrim, body.device #scrim { opacity: 1; pointer-events: auto; }
+  #menu { position: fixed; z-index: 6; top: 16px; bottom: 16px; left: 16px; width: 300px; padding: 28px 22px; display: flex; flex-direction: column; gap: 6px;
+          transform: translateX(calc(-100% - 20px)); transition: transform var(--drawer) var(--ease); }
+  body.menu #menu { transform: none; }
+  #menu .who { padding: 12px 14px 22px; }
+  #menu .who b { display: block; font-size: 20px; letter-spacing: -.02em; }
+  #menu .who span { font-size: 13px; color: var(--ink-2); }
+  .item { display: flex; align-items: center; gap: 14px; padding: 13px 14px; border-radius: 16px; border: 0; background: transparent;
+          font: inherit; font-weight: 600; font-size: 16px; color: var(--ink); cursor: pointer; text-align: left;
+          opacity: 0; transform: translateY(10px); transition: opacity 260ms var(--ease), transform 260ms var(--ease), background 160ms var(--ease); }
+  body.menu .item { opacity: 1; transform: none; }
+  body.menu .item:nth-child(2) { transition-delay: 40ms; } body.menu .item:nth-child(3) { transition-delay: 80ms; }
+  body.menu .item:nth-child(4) { transition-delay: 120ms; } body.menu .item:nth-child(5) { transition-delay: 160ms; }
+  body.menu .item:nth-child(6) { transition-delay: 200ms; } body.menu .item:nth-child(7) { transition-delay: 240ms; }
+  .item .icon { width: 22px; height: 22px; color: var(--ink-2); }
+  .item:active { transform: scale(.98); }
+  @media (hover: hover) and (pointer: fine) { .item:hover { background: rgba(255, 255, 255, .55); } }
+  .item.now { background: rgba(255, 255, 255, .7); }
+  .item.quietly { margin-top: auto; color: var(--ink-2); }
+  .item .mode { margin-left: auto; font-size: 12px; color: var(--accent-deep); }
+  body.family .staff-only { display: none !important; }
+
+  /* Sign in. */
+  #gate { display: none; place-items: center; padding: 24px; }
+  #gate.on { display: grid; }
+  #gate .sheet { width: min(560px, 100%); padding: 44px 44px 40px; display: flex; flex-direction: column; gap: 22px; }
+  #gate h1 { margin: 0; font-size: 34px; letter-spacing: -.04em; line-height: 1.05; }
+  #gate .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .role { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border-radius: 20px; border: 0; cursor: pointer; text-align: left; font: inherit;
+          background: rgba(255, 255, 255, .5); box-shadow: 0 0 0 1px rgba(255, 255, 255, .7); color: var(--ink);
+          transition: transform 140ms var(--ease), box-shadow 200ms var(--ease), background 200ms var(--ease); }
+  .role b { font-size: 18px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
+  .role span { font-size: 13px; color: var(--ink-2); line-height: 1.4; }
+  .role:active { transform: scale(.98); }
+  .role.on { background: var(--plate); box-shadow: 0 0 0 2px var(--accent); }
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .field input { font: inherit; font-size: 17px; padding: 13px 16px; border-radius: 14px; border: 0; background: rgba(255, 255, 255, .7);
+                 box-shadow: 0 0 0 1px rgba(40, 42, 38, .12); color: var(--ink); }
+  .field input:focus { outline: 0; box-shadow: 0 0 0 2px var(--accent); }
+  .field input::placeholder { color: var(--ink-3); }
+
+  /* Ward: one card per bed. */
+  #ward { overflow: auto; padding: 24px; }
+  #ward .top { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+  #ward h1 { margin: 0; font-size: 28px; letter-spacing: -.03em; }
+  #beds { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; max-width: 1200px; }
+  .bedcard { display: flex; flex-direction: column; gap: 14px; padding: 24px 26px; min-height: 190px; border: 0; cursor: pointer; text-align: left; font: inherit; color: var(--ink);
+             transition: transform 180ms var(--ease), box-shadow 220ms var(--ease); }
+  .bedcard:active { transform: scale(.98); }
+  @media (hover: hover) and (pointer: fine) { .bedcard:hover { transform: translateY(-2px); } }
+  .bedcard .name { font-size: 26px; font-weight: 700; letter-spacing: -.03em; }
+  .bedcard .line { font-size: 14px; color: var(--ink-2); }
+  .bedcard .foot { margin-top: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bedcard .count { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+                    background: var(--blush); color: var(--ink); }
+  .bedcard .count.urgent { background: var(--danger-wash); color: var(--danger); }
+  .bedcard.empty { color: var(--ink-3); }
+  .bedcard.empty .name { color: var(--ink-2); }
+
+  /* The caregiver frame. */
+  #bed { padding: 16px; }
+  #frame { position: relative; height: 100%; background: linear-gradient(160deg, rgba(255, 255, 255, .72), rgba(255, 255, 255, .46)); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 18px; padding: 18px 22px 20px; }
+  #frame .top { display: flex; align-items: center; gap: 16px; }
+  #frame .top .title { display: flex; flex-direction: column; gap: 2px; }
+  #bedName { font-size: 22px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; }
+  #bedLine { font-size: 13px; color: var(--ink-2); }
+  #frame .top .chips { margin-left: auto; display: flex; gap: 18px; }
+  #banner { display: none; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 999px; background: var(--danger-wash); color: var(--danger); font-weight: 600; font-size: 14px; }
+  #body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(340px, .9fr); gap: 24px; min-height: 0; }
+
+  /* Camera card: room on the front, patient on the back, flipped like a card. */
+  #camWrap { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  #cam { position: relative; width: 100%; aspect-ratio: 4 / 3; perspective: 1600px; margin: 0 auto; }
+  #camInner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 560ms var(--ease); }
+  #cam.flipped #camInner { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; border-radius: var(--r-lg); overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+          background: rgba(255, 255, 255, .35); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 0 0 1px rgba(255, 255, 255, .6); }
+  .face.back { transform: rotateY(180deg); }
+  .face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+  .face img:not([src]) { visibility: hidden; }
+  .face .hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
+  .face .corner { position: absolute; top: 12px; left: 12px; }
+  #stage { position: absolute; inset: 0; pointer-events: none; }
+  .spot { position: absolute; top: 0; left: 0; border: 2px solid rgba(255, 255, 255, .9); border-radius: 12px; box-shadow: 0 0 0 1px rgba(40, 42, 38, .15);
+          transition: transform 400ms var(--ease), border-color 300ms var(--ease), box-shadow 300ms var(--ease); overflow: hidden; }
+  .spot.other { border-color: rgba(255, 255, 255, .45); border-style: dashed; box-shadow: none; }
+  .spot.looking { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(184, 207, 179, .5); }
+  .spot.asked { border-color: var(--accent); box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--accent); }
+  .spot .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(184, 207, 179, .55); transition: height 120ms linear; }
+  .label { position: absolute; top: 0; left: 0; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--ink);
+           background: rgba(255, 255, 255, .85); box-shadow: 0 1px 4px rgba(40, 42, 38, .15); white-space: nowrap; transition: transform 400ms var(--ease); }
+  .label.other { color: var(--ink-2); background: rgba(255, 255, 255, .6); }
+  .label.asked, .label.looking { background: var(--accent); color: #fff; }
   #faceFrame { position: absolute; display: none; border: 2px solid var(--accent); border-radius: 28%; pointer-events: none; }
-  #spots { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+  #camBar { display: flex; align-items: center; gap: 10px; }
+  #camBar .seg { display: inline-flex; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, .5); box-shadow: 0 0 0 1px rgba(255, 255, 255, .6); position: relative; }
+  #camBar .seg button { position: relative; z-index: 1; border: 0; background: transparent; font: inherit; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: 999px; color: var(--ink-2); cursor: pointer;
+                        transition: color 200ms var(--ease); }
+  #camBar .seg button.on { color: var(--ink); }
+  #camBar .seg .thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: var(--plate);
+                        box-shadow: 0 1px 3px rgba(40, 42, 38, .15); transition: transform 260ms var(--ease); }
+  #camBar .seg.second .thumb { transform: translateX(100%); }
+  #camHelp { margin-left: auto; text-align: right; }
+
+  /* Requests: glass rows with a tick to acknowledge. */
+  #reqs { display: flex; flex-direction: column; min-height: 0; }
+  #reqs .head { display: flex; align-items: baseline; gap: 12px; padding: 4px 4px 12px; }
+  #reqs .head h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+  #reqs .head .quiet { margin-left: auto; }
+  #alerts { display: flex; flex-direction: column; gap: 10px; overflow: auto; padding: 2px; margin: -2px; }
+  .alert { display: grid; grid-template-columns: 68px 1fr 44px; gap: 14px; align-items: center; padding: 14px 14px 14px 18px; border-radius: 20px;
+           background: rgba(255, 255, 255, .55); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 1px rgba(255, 255, 255, .6);
+           transition: background 240ms var(--ease), opacity 400ms var(--ease), transform 260ms var(--ease); }
+  @starting-style { .alert { opacity: 0; transform: translateY(8px); } }
+  .alert .time { font-size: 22px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+  .alert .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .alert .msg { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+  .alert .meta { font-size: 12.5px; color: var(--ink-2); }
+  .alert.pending { background: rgba(246, 226, 233, .85); }
+  .alert.escalated { background: rgba(246, 227, 224, .9); }
+  .alert.escalated .time, .alert.escalated .meta { color: var(--danger); } .alert.escalated .meta { font-weight: 600; }
+  .alert.acked { background: rgba(255, 255, 255, .35); color: var(--ink-3); }
+  .alert.acked .time, .alert.acked .meta { color: var(--ink-3); } .alert.acked .msg { font-weight: 600; }
+  .tick { width: 44px; height: 44px; border-radius: 999px; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--ink-2);
+          background: var(--plate); box-shadow: 0 0 0 1px rgba(40, 42, 38, .12); transition: transform 140ms var(--ease), background 220ms var(--ease), color 220ms var(--ease), box-shadow 220ms var(--ease); }
+  .tick .icon { width: 20px; height: 20px; transition: transform 220ms var(--ease); transform: scale(.85); }
+  .tick:active { transform: scale(.92); }
+  .alert.acked .tick, .tick.sent { background: var(--accent); color: #fff; box-shadow: 0 0 0 1px var(--accent); cursor: default; }
+  .alert.acked .tick .icon, .tick.sent .icon { transform: none; }
+  #empty { padding: 28px 18px; color: var(--ink-2); font-size: 15px; line-height: 1.5; border-radius: 20px; background: rgba(255, 255, 255, .35); }
+
+  #unpaired { display: none; place-items: center; text-align: center; min-height: 0; flex: 1; }
+  #frame.bare .chips, #frame.bare #tempPill, #frame.bare #banner { visibility: hidden; }
+
+  /* Bottom bar: temperature on the left, bed flip on the right. */
+  #frame .bottom { display: flex; align-items: center; gap: 14px; }
+  #tempPill { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px 0 14px; border-radius: 999px; font-weight: 600; font-size: 15px;
+              background: rgba(255, 255, 255, .55); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 1px rgba(255, 255, 255, .6); }
+  #tempPill .icon { width: 22px; height: 22px; color: var(--accent-deep); }
+  #tempPill small { font-weight: 500; color: var(--ink-2); }
+  #flip { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+  #flip .which { font-size: 13px; font-weight: 600; color: var(--ink-2); min-width: 60px; text-align: center; }
+
+  /* Analytics. */
+  #analytics { overflow: auto; padding: 24px; }
+  #analytics .top { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+  #analytics h1 { margin: 0; font-size: 28px; letter-spacing: -.03em; }
+  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; max-width: 1000px; margin-bottom: 18px; }
+  .stat { padding: 22px 24px; display: flex; flex-direction: column; gap: 6px; }
+  .stat b { font-size: 34px; letter-spacing: -.04em; line-height: 1; white-space: nowrap; }
+  .stat span { font-size: 13px; color: var(--ink-2); }
+  #byType { max-width: 1000px; padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; }
+  #byType h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.02em; }
+  .bar { display: grid; grid-template-columns: minmax(200px, 40%) 1fr 40px; align-items: center; gap: 14px; font-size: 15px; padding: 6px 0; }
+  .bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar i { display: block; height: 10px; border-radius: 999px; background: var(--accent-light); transform-origin: left; transition: transform 600ms var(--ease); }
+  .bar b { text-align: right; }
+
+  /* Device sheet: the controls a nurse rarely needs, off to the side. */
+  #device { position: fixed; z-index: 6; top: 16px; bottom: 16px; right: 16px; width: min(460px, calc(100% - 32px)); padding: 26px 26px 30px; overflow: auto;
+            display: flex; flex-direction: column; gap: 26px; transform: translateX(calc(100% + 20px)); transition: transform var(--drawer) var(--ease); }
+  body.device #device { transform: none; }
+  #device .head { display: flex; align-items: center; gap: 12px; }
+  #device h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .section-head { display: flex; align-items: baseline; gap: 12px; }
+  .section-head h3 { margin: 0; font-size: 15px; letter-spacing: -.01em; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  #spots { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--ink-2); }
   #debug { display: none; }
-  input { font: inherit; padding: 9px 12px; width: 96px; border-radius: 999px; border: 0; background: var(--plate); box-shadow: 0 0 0 1px var(--edge); }
+  input[type=number] { font: inherit; padding: 9px 12px; width: 96px; border-radius: 999px; border: 0; background: var(--plate); box-shadow: 0 0 0 1px var(--edge); }
   #gaze { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill.small { padding: 8px 14px; font-size: 13px; }
+  a { color: var(--ink-2); }
+
+  @media (max-width: 900px) {
+    #bed { padding: 8px; overflow: auto; }
+    #frame { height: auto; min-height: 100%; display: flex; flex-direction: column; padding: 14px 14px 16px; gap: 14px; }
+    #body { grid-template-columns: 1fr; } #frame .top .chips { display: none; }
+    #alerts { overflow: visible; } #cam { max-width: 100%; }
+  }
 </style>
 </head>
 <body>
-<div id="page">
-  <header>
-    <span id="bed">Read the Room</span>
-    <span class="chip" id="conn">Connecting</span>
-    <span class="chip" id="face"></span>
-    <span class="chip" id="temp"></span>
-    <span class="chip" id="perf"></span>
-  </header>
-  <div id="banner"></div>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-arrow-left" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z"/></symbol>
+<symbol id="i-bed" viewBox="0 0 256 256"><path d="M216,72H32V48a8,8,0,0,0-16,0V208a8,8,0,0,0,16,0V176H240v32a8,8,0,0,0,16,0V112A40,40,0,0,0,216,72ZM32,88h72v72H32Zm88,72V88h96a24,24,0,0,1,24,24v48Z"/></symbol>
+<symbol id="i-camera" viewBox="0 0 256 256"><path d="M208,56H180.28L166.65,35.56A8,8,0,0,0,160,32H96a8,8,0,0,0-6.65,3.56L75.71,56H48A24,24,0,0,0,24,80V192a24,24,0,0,0,24,24H208a24,24,0,0,0,24-24V80A24,24,0,0,0,208,56Zm8,136a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V80a8,8,0,0,1,8-8H80a8,8,0,0,0,6.66-3.56L100.28,48h55.43l13.63,20.44A8,8,0,0,0,176,72h32a8,8,0,0,1,8,8ZM128,88a44,44,0,1,0,44,44A44.05,44.05,0,0,0,128,88Zm0,72a28,28,0,1,1,28-28A28,28,0,0,1,128,160Z"/></symbol>
+<symbol id="i-caret-left" viewBox="0 0 256 256"><path d="M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z"/></symbol>
+<symbol id="i-caret-right" viewBox="0 0 256 256"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></symbol>
+<symbol id="i-check" viewBox="0 0 256 256"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></symbol>
+<symbol id="i-gear" viewBox="0 0 256 256"><path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm88-29.84q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.21,107.21,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.71,107.71,0,0,0-26.25-10.87,8,8,0,0,0-7.06,1.49L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.21,107.21,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06Zm-16.1-6.5a73.93,73.93,0,0,1,0,8.68,8,8,0,0,0,1.74,5.48l14.19,17.73a91.57,91.57,0,0,1-6.23,15L187,173.11a8,8,0,0,0-5.1,2.64,74.11,74.11,0,0,1-6.14,6.14,8,8,0,0,0-2.64,5.1l-2.51,22.58a91.32,91.32,0,0,1-15,6.23l-17.74-14.19a8,8,0,0,0-5-1.75h-.48a73.93,73.93,0,0,1-8.68,0,8,8,0,0,0-5.48,1.74L100.45,215.8a91.57,91.57,0,0,1-15-6.23L82.89,187a8,8,0,0,0-2.64-5.1,74.11,74.11,0,0,1-6.14-6.14,8,8,0,0,0-5.1-2.64L46.43,170.6a91.32,91.32,0,0,1-6.23-15l14.19-17.74a8,8,0,0,0,1.74-5.48,73.93,73.93,0,0,1,0-8.68,8,8,0,0,0-1.74-5.48L40.2,100.45a91.57,91.57,0,0,1,6.23-15L69,82.89a8,8,0,0,0,5.1-2.64,74.11,74.11,0,0,1,6.14-6.14A8,8,0,0,0,82.89,69L85.4,46.43a91.32,91.32,0,0,1,15-6.23l17.74,14.19a8,8,0,0,0,5.48,1.74,73.93,73.93,0,0,1,8.68,0,8,8,0,0,0,5.48-1.74L155.55,40.2a91.57,91.57,0,0,1,15,6.23L173.11,69a8,8,0,0,0,2.64,5.1,74.11,74.11,0,0,1,6.14,6.14,8,8,0,0,0,5.1,2.64l22.58,2.51a91.32,91.32,0,0,1,6.23,15l-14.19,17.74A8,8,0,0,0,199.87,123.66Z"/></symbol>
+<symbol id="i-list" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 256 256"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></symbol>
+<symbol id="i-user" viewBox="0 0 256 256"><path d="M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0C63.78,166.78,40.31,185.66,25.08,212a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z"/></symbol>
+<symbol id="i-x" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></symbol>
+<symbol id="i-users" viewBox="0 0 256 256"><path d="M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z"/></symbol>
+</svg>
 
-  <section>
-    <div class="section-head"><h2>Requests</h2>
-      <button class="pill soft small" id="clearDone" style="margin-left:auto">Clear answered</button></div>
-    <div id="empty">No requests yet.</div>
-    <div id="alerts"></div>
-  </section>
+<div id="backdrop"><img id="bg" alt=""></div>
 
-  <section id="device">
-    <div class="col" id="patient">
-      <div class="section-head"><h2>Patient</h2><span class="tag" id="calState" style="margin-left:auto"></span></div>
-      <div class="note" id="check"></div>
-      <div class="quiet" id="meter"></div>
-      <div class="row">
-        <button class="pill" id="calibrate">Start calibration <span class="go">&#8594;</span></button>
-        <button class="pill soft" id="previewBtn">Show camera view</button>
+<!-- Sign in -->
+<section class="view" id="gate">
+  <div class="sheet glass arrive">
+    <div><div class="eyebrow">Read the Room</div><h1 style="margin-top:10px">Who is signing in?</h1></div>
+    <div class="roles">
+      <button class="role on" data-role="staff"><b><svg class="icon"><use href="#i-user"/></svg>Staff</b><span>Nurses and care staff. Every bed, device controls and analytics.</span></button>
+      <button class="role" data-role="family"><b><svg class="icon"><use href="#i-users"/></svg>Family</b><span>See what your person asks for and let them know you are coming.</span></button>
+    </div>
+    <div class="field"><label for="who">Your name</label><input id="who" placeholder="Priya" autocomplete="name"></div>
+    <div class="row"><button class="pill" id="enter">Continue <span class="go">&#8594;</span></button>
+      <span class="quiet">No account is needed for this prototype. Your name stays on this device.</span></div>
+  </div>
+</section>
+
+<!-- Ward -->
+<section class="view" id="ward">
+  <div class="top">
+    <button class="ghost round" id="burgerWard" aria-label="Menu"><svg class="icon"><use href="#i-list"/></svg></button>
+    <h1>Patients</h1>
+    <span class="chip" id="conn" style="margin-left:auto">Connecting</span>
+  </div>
+  <div id="beds"></div>
+</section>
+
+<!-- Caregiver frame -->
+<section class="view" id="bed">
+  <div id="frame" class="glass">
+    <div class="top">
+      <button class="ghost round" id="burger" aria-label="Menu"><i></i><i></i></button>
+      <div class="title"><div id="bedName">Read the Room</div><div id="bedLine">Connecting</div></div>
+      <div id="banner"></div>
+      <div class="chips"><span class="chip" id="face"></span><span class="chip" data-staff="1" id="calState"></span></div>
+    </div>
+    <div id="body">
+      <div id="camWrap">
+        <div id="cam">
+          <div id="camInner">
+            <div class="face front">
+              <img id="scenePhoto" alt="Room camera">
+              <div id="stage"></div>
+              <div class="hint" id="sceneHint">Waiting for the first photo from the room camera.</div>
+            </div>
+            <div class="face back">
+              <img id="preview" alt="Patient camera"><div id="faceFrame"></div>
+              <div class="hint" id="previewHint">Turning the patient camera on.</div>
+            </div>
+          </div>
+        </div>
+        <div id="camBar">
+          <div class="seg" id="seg"><div class="thumb"></div><button class="on" data-side="room">Room</button><button data-side="patient">Patient</button></div>
+          <div class="quiet" id="camHelp"></div>
+        </div>
       </div>
-      <div id="previewBox">
-        <div id="previewWrap"><img id="preview" alt="Camera view"><div id="faceFrame"></div></div>
-        <div class="note" id="previewHelp" style="margin-top:8px"></div>
+      <div id="reqs">
+        <div class="head"><h2>Requests</h2><span class="quiet" id="reqCount"></span>
+          <button class="ghost staff-only" id="clearDone" style="height:34px;font-size:13px">Clear answered</button></div>
+        <div id="empty">Nothing asked for yet. When the patient looks at something and answers yes, it shows up here.</div>
+        <div id="alerts"></div>
       </div>
     </div>
-    <div class="col" id="scene" style="display:none">
-      <div class="section-head"><h2>Room scan</h2>
-        <button class="pill soft small" id="relearn" style="margin-left:auto">Learn spots again</button></div>
-      <div class="note" id="sceneStatus"></div>
-      <ul id="spots"></ul>
-      <a href="/room" target="_blank" style="font-size:15px">Open room view</a>
+    <div id="unpaired"><div><div class="note">No device paired to this bed yet.</div><button class="pill soft" id="backLive" style="margin-top:14px">Back to the live bed</button></div></div>
+    <div class="bottom">
+      <div id="tempPill"><svg class="icon"><use href="#i-sun"/></svg><span id="temp">No temperature</span></div>
+      <div id="flip">
+        <button class="ghost round" id="prevBed" aria-label="Previous bed"><svg class="icon"><use href="#i-caret-left"/></svg></button>
+        <span class="which" id="which"></span>
+        <button class="ghost round" id="nextBed" aria-label="Next bed"><svg class="icon"><use href="#i-caret-right"/></svg></button>
+      </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section class="col" id="debug">
-    <div class="section-head"><h2>Simulation</h2><span class="quiet" style="margin-left:auto">Where the patient is looking</span></div>
+<!-- Analytics -->
+<section class="view" id="analytics">
+  <div class="top">
+    <button class="ghost round" id="burgerAn" aria-label="Menu"><svg class="icon"><use href="#i-list"/></svg></button>
+    <h1>Analytics</h1>
+  </div>
+  <div id="stats">
+    <div class="stat glass"><b id="stToday">0</b><span>requests in the last day</span></div>
+    <div class="stat glass"><b id="stWait">0:00</b><span>typical time to a nurse</span></div>
+    <div class="stat glass"><b id="stLong">0:00</b><span>longest wait</span></div>
+    <div class="stat glass"><b id="stUrgent">0</b><span>urgent</span></div>
+  </div>
+  <div id="byType" class="glass"><h2>What was asked for</h2><div id="bars"></div><div class="quiet" id="anNote"></div></div>
+</section>
+
+<!-- Scrim, menu drawer and device sheet -->
+<div id="scrim"></div>
+<nav id="menu" class="glass">
+  <div class="who"><b id="whoName">Staff</b><span id="whoRole">Hospital setting</span></div>
+  <button class="item" data-go="ward"><svg class="icon"><use href="#i-bed"/></svg>Dashboard</button>
+  <button class="item" data-go="bed"><svg class="icon"><use href="#i-camera"/></svg>Caregiver view</button>
+  <button class="item staff-only" data-go="analytics"><svg class="icon"><use href="#i-check"/></svg>Analytics</button>
+  <button class="item staff-only" id="openDevice"><svg class="icon"><use href="#i-gear"/></svg>Device</button>
+  <button class="item" id="toggleMode"><svg class="icon"><use href="#i-users"/></svg>Mode<span class="mode" id="modeLabel">Hospital</span></button>
+  <button class="item quietly" id="signOut"><svg class="icon"><use href="#i-arrow-left"/></svg>Sign out</button>
+</nav>
+
+<aside id="device" class="glass">
+  <div class="head"><h2>Device</h2><span class="quiet" id="perf"></span><button class="ghost round" id="closeDevice" aria-label="Close" style="margin-left:auto"><svg class="icon"><use href="#i-x"/></svg></button></div>
+  <div class="col" id="patient">
+    <div class="section-head"><h3>Patient camera</h3><span class="tag" id="calTag" style="margin-left:auto"></span></div>
+    <div class="note" id="check"></div>
+    <div class="quiet" id="meter"></div>
+    <div class="row">
+      <button class="pill" id="calibrate">Start calibration <span class="go">&#8594;</span></button>
+      <button class="pill soft" id="previewBtn">Show camera view</button>
+    </div>
+    <div class="quiet" id="previewHelp"></div>
+  </div>
+  <div class="col" id="scene" style="display:none">
+    <div class="section-head"><h3>Room scan</h3><button class="pill soft small" id="relearn" style="margin-left:auto">Learn spots again</button></div>
+    <div class="note" id="sceneStatus"></div>
+    <ul id="spots"></ul>
+    <a href="/room" target="_blank" style="font-size:14px">Open the full room view</a>
+  </div>
+  <div class="col" id="debug">
+    <div class="section-head"><h3>Simulation</h3><span class="quiet" style="margin-left:auto">Where the patient is looking</span></div>
     <div id="gaze"></div>
     <p class="note" id="simHelp" style="margin:0"></p>
     <div class="row">Room temperature °C <input id="t" type="number" step="0.5">
       <button class="pill soft small" id="setT">Set</button>
       <button class="pill soft small" id="clearT">Clear</button></div>
-  </section>
-</div>
+  </div>
+</aside>
+
 <script>
 const $ = id => document.getElementById(id);
 const post = (path, body) => fetch(path, {method: 'POST', body: JSON.stringify(body || {})});
-const cards = new Map();
-const seen = new Map();
-let audio = null, debugBuilt = false;
+const cards = new Map(), seen = new Map(), els = new Map();
+let audio = null, debugBuilt = false, state = null, online = false, photoId = -1, previewOn = false, streaming = false, lastMessage = 0, bedName = 'Device';
 document.addEventListener('pointerdown', () => { audio = audio || new AudioContext(); }, {once: true});
 function beep(freq, n) {
   if (!audio) return;
@@ -127,22 +399,136 @@ function beep(freq, n) {
     o.start(t); o.stop(t + .2);
   }
 }
-function chip(id, text, cls) { $(id).textContent = text; $(id).className = 'chip ' + (cls || ''); }
-function clock(seconds) { const m = Math.floor(seconds / 60), s = seconds % 60; return m + ':' + String(s).padStart(2, '0'); }
+const clock = s => s >= 3600 ? Math.floor(s / 3600) + 'h' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') : Math.floor(s / 60) + ':' + String(Math.round(s) % 60).padStart(2, '0');
+const chip = (id, text, cls) => { $(id).textContent = text; $(id).className = 'chip ' + (cls || '') + ($(id).dataset.staff ? ' staff-only' : ''); };
+const short = m => m.replace(/^[^:]*: patient /, '').replace(/^\w/, c => c.toUpperCase());
 
-function render(s) {
-  const st = s.status, ses = s.session;
-  $('bed').textContent = s.bed;
-  chip('conn', 'Online', 'good');
-  chip('face', st.face_ok ? 'Patient in view' : 'Patient not in view', st.face_ok ? 'good' : 'bad');
-  chip('temp', st.temp_c == null ? 'No temperature' : st.temp_c.toFixed(1) + ' °C');
-  chip('perf', st.fps + ' fps');
-  const banner = $('banner');
-  banner.style.display = st.face_lost || st.too_slow ? 'block' : 'none';
-  banner.textContent = st.face_lost
-    ? s.bed + ': the device cannot see the patient. Requests cannot be made until this is fixed.'
-    : s.bed + ': the device is running too slowly (' + st.fps + ' frames per second) to read gaze reliably.';
+/* Who is signed in, and which mode. Stored on this browser only. */
+const who = { role: localStorage.getItem('rtr.role'), name: localStorage.getItem('rtr.name') || '' };
+function applyWho() {
+  document.body.classList.toggle('family', who.role === 'family');
+  $('whoName').textContent = who.name || (who.role === 'family' ? 'Family' : 'Staff');
+  $('whoRole').textContent = who.role === 'family' ? 'Family mode' : 'Hospital setting';
+  $('modeLabel').textContent = who.role === 'family' ? 'Family' : 'Hospital';
+}
+document.querySelectorAll('.role').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.role').forEach(x => x.classList.toggle('on', x === b));
+});
+$('enter').onclick = () => {
+  who.role = document.querySelector('.role.on').dataset.role;
+  who.name = $('who').value.trim();
+  localStorage.setItem('rtr.role', who.role); localStorage.setItem('rtr.name', who.name);
+  applyWho(); go('ward');
+};
+$('signOut').onclick = () => { localStorage.removeItem('rtr.role'); who.role = null; closeAll(); go('gate'); };
+$('toggleMode').onclick = () => { who.role = who.role === 'family' ? 'staff' : 'family'; localStorage.setItem('rtr.role', who.role); applyWho(); };
 
+/* Beds: the live device plus two unpaired beds either side, so the flip has somewhere to go. */
+const beds = [{id: '3', name: 'Bed 3'}, {id: 'live'}, {id: '5', name: 'Bed 5'}];
+let bedIndex = 1;
+const bedLabel = b => b.id === 'live' ? bedName : b.name;
+
+/* Views and the drawers. */
+function go(view, arg) {
+  if (!who.role) view = 'gate';
+  if (view === 'bed' && arg != null) bedIndex = Math.max(0, beds.findIndex(b => b.id === arg));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === view));
+  document.querySelectorAll('.item[data-go]').forEach(i => i.classList.toggle('now', i.dataset.go === view));
+  location.hash = view === 'bed' ? 'bed/' + beds[bedIndex].id : view;
+  closeAll();
+  if (state) render(state);
+}
+function closeAll() { document.body.classList.remove('menu', 'device'); }
+const toggleMenu = () => document.body.classList.toggle('menu');
+['burger', 'burgerWard', 'burgerAn'].forEach(id => $(id).onclick = toggleMenu);
+$('scrim').onclick = closeAll;
+document.querySelectorAll('.item[data-go]').forEach(i => i.onclick = () => go(i.dataset.go));
+$('openDevice').onclick = () => { document.body.classList.remove('menu'); document.body.classList.add('device'); };
+$('closeDevice').onclick = closeAll;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+$('backLive').onclick = () => go('bed', 'live');
+$('prevBed').onclick = () => { bedIndex = (bedIndex + beds.length - 1) % beds.length; go('bed'); };
+$('nextBed').onclick = () => { bedIndex = (bedIndex + 1) % beds.length; go('bed'); };
+
+/* Camera card: the room on the front, the patient on the back. */
+let side = 'room';
+function flipTo(which) {
+  side = which;
+  $('cam').classList.toggle('flipped', side === 'patient');
+  $('seg').classList.toggle('second', side === 'patient');
+  $('seg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.side === side));
+  if (state && !state.status.simulate) post('/api/preview', {on: side === 'patient'});
+}
+$('seg').querySelectorAll('button').forEach(b => b.onclick = () => flipTo(b.dataset.side));
+$('previewBtn').onclick = () => { closeAll(); go('bed'); flipTo(side === 'patient' ? 'room' : 'patient'); };
+const pv = $('preview');
+setInterval(() => {
+  if (previewOn && !streaming) { pv.src = '/preview.mjpg?t=' + Date.now(); streaming = true; }
+  if (!previewOn && streaming) { pv.removeAttribute('src'); streaming = false; }
+}, 300);
+pv.onerror = () => { streaming = false; };
+
+function overlapping(a, b) {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w <= 0 || h <= 0) return 0;
+  const inter = w * h, union = (a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter;
+  return inter / union;
+}
+function place(key, box, size, label, cls, progress) {
+  let e = els.get(key);
+  if (!e) {
+    e = {box: document.createElement('div'), tag: document.createElement('div'), fill: document.createElement('div')};
+    e.fill.className = 'fill'; e.box.appendChild(e.fill);
+    $('stage').append(e.box, e.tag); els.set(key, e);
+  }
+  const [w, h] = size, [x1, y1, x2, y2] = box;
+  const sw = $('stage').clientWidth, sh = $('stage').clientHeight;
+  e.box.className = 'spot ' + cls; e.tag.className = 'label ' + cls;
+  e.box.style.transform = 'translate(' + (x1 / w * sw) + 'px,' + (y1 / h * sh) + 'px)';
+  e.box.style.width = ((x2 - x1) / w * 100) + '%'; e.box.style.height = ((y2 - y1) / h * 100) + '%';
+  e.tag.style.transform = 'translate(' + (x1 / w * sw + 6) + 'px,' + (y1 / h * sh + 6) + 'px)';
+  e.tag.textContent = label; e.fill.style.height = (progress * 100) + '%';
+}
+function fitCam(w, h) {
+  const wrap = $('camWrap'), bar = $('camBar');
+  const narrow = matchMedia('(max-width: 900px)').matches;
+  const availW = wrap.clientWidth, availH = Math.max(120, wrap.clientHeight - bar.offsetHeight - 12);
+  const scale = narrow ? availW / w : Math.min(availW / w, availH / h);
+  $('cam').style.width = Math.floor(w * scale) + 'px'; $('cam').style.aspectRatio = w + ' / ' + h;
+}
+function renderScene(s) {
+  const sc = s.scene, ses = s.session, cal = s.calibration;
+  const names = Object.fromEntries(s.zones.map(z => [z.id, z.label]));
+  const asked = !cal.active && ses.state === 'prompt' ? ses.zone : null;
+  const looking = !cal.active && ses.state === 'idle' ? ses.leader : null;
+  const cls = id => id === asked ? 'asked' : id === looking ? 'looking' : '';
+  const prog = id => id === looking ? ses.progress : 0;
+  const have = sc && sc.size && sc.photo_id != null;
+  $('sceneHint').style.display = have ? 'none' : 'grid';
+  $('sceneHint').textContent = !sc ? 'No room camera on this device.' : sc.error || 'Waiting for the first photo from the room camera.';
+  if (!have) { fitCam(4, 3); $('camHelp').textContent = ''; return; }
+  const [w, h] = sc.size;
+  fitCam(w, h);
+  if (sc.photo_id !== photoId) {
+    photoId = sc.photo_id;
+    const url = '/scene.jpg?id=' + photoId;
+    $('scenePhoto').src = url; $('bg').src = url; $('bg').classList.add('on');
+  }
+  const live = new Set(), located = sc.spots.filter(p => p.box);
+  located.forEach(p => { live.add('z:' + p.zone); place('z:' + p.zone, p.box, sc.size, names[p.zone] || p.now, cls(p.zone), prog(p.zone)); });
+  sc.found.forEach((f, i) => {
+    const area = (f.box[2] - f.box[0]) * (f.box[3] - f.box[1]) / (w * h);
+    if (area > 0.6 || located.some(p => overlapping(p.box, f.box) > 0.2)) return;
+    live.add('o:' + f.label + i); place('o:' + f.label + i, f.box, sc.size, f.label, 'other', 0);
+  });
+  for (const [key, e] of els) if (!live.has(key)) { e.box.remove(); e.tag.remove(); els.delete(key); }
+  const sides = s.status.sides;
+  $('camHelp').textContent = side === 'patient' ? '' : sc.age_s > 30 ? 'Room camera quiet for ' + Math.round(sc.age_s) + ' s'
+    : sides ? 'Left: ' + (sides.left || []).map(z => names[z] || z).join(', ') + ' · Right: ' + (sides.right || []).map(z => names[z] || z).join(', ')
+    : 'Photo ' + Math.round(sc.age_s) + ' s ago';
+}
+
+function renderAlerts(s) {
   const ids = new Set(s.alerts.map(a => a.id));
   for (const [id, el] of cards) if (!ids.has(id)) { el.remove(); cards.delete(id); seen.delete(id); }
   s.alerts.slice().reverse().forEach(a => {
@@ -151,59 +537,122 @@ function render(s) {
       el = document.createElement('div');
       const time = document.createElement('div'); time.className = 'time';
       const body = document.createElement('div'); body.className = 'body';
-      const msg = document.createElement('div'); msg.className = 'msg';
-      msg.textContent = a.message.replace(/^[^:]*: patient /, '').replace(/^\w/, c => c.toUpperCase());
+      const msg = document.createElement('div'); msg.className = 'msg'; msg.textContent = short(a.message);
       const meta = document.createElement('div'); meta.className = 'meta';
-      const btn = document.createElement('button'); btn.className = 'pill';
-      btn.innerHTML = '<span class="label">On my way</span> <span class="go">&#8594;</span>';
-      btn.onclick = () => {
-        btn.classList.add('sent');
-        btn.querySelector('.label').textContent = 'On the way';
-        post('/api/ack', {id: a.id});
-      };
+      const btn = document.createElement('button'); btn.className = 'tick'; btn.setAttribute('aria-label', 'On my way');
+      btn.innerHTML = '<svg class="icon"><use href="#i-check"/></svg>';
+      btn.onclick = () => { if (!btn.classList.contains('sent')) { btn.classList.add('sent'); post('/api/ack', {id: a.id}); } };
       body.append(msg, meta); el.append(time, body, btn);
-      $('alerts').prepend(el);
-      cards.set(a.id, el);
+      $('alerts').prepend(el); cards.set(a.id, el);
     }
     el.className = 'alert ' + a.state;
     const at = new Date(a.created_at * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-    const wait = Math.max(0, Math.round((a.acked_at || s.time) - a.created_at));
+    const wait = Math.max(0, (a.acked_at || s.time) - a.created_at);
     el.querySelector('.time').textContent = clock(wait);
-    el.querySelector('.meta').textContent = a.state === 'acked' ? 'Answered, ' + at
-      : (a.urgent ? 'Urgent, ' : a.state === 'escalated' ? 'Overdue, ' : 'Waiting, ') + at;
+    el.querySelector('.meta').textContent = a.state === 'acked' ? 'Someone is coming, ' + at
+      : (a.urgent ? 'Urgent, ' : a.state === 'escalated' ? 'Waiting too long, ' : 'Waiting, ') + at;
     if (seen.get(a.id) !== a.state) {
       if (a.state === 'escalated') beep(880, 3); else if (a.state === 'pending') beep(660, 1);
       seen.set(a.id, a.state);
     }
   });
   $('empty').style.display = s.alerts.length ? 'none' : 'block';
+  const open = s.alerts.filter(a => a.state !== 'acked').length;
+  $('reqCount').textContent = open ? open + ' waiting' : '';
+}
 
-  const cal = s.calibration;
+function renderWard(s) {
+  const st = s.status, open = s.alerts.filter(a => a.state !== 'acked');
+  const urgent = open.some(a => a.state === 'escalated');
+  $('beds').replaceChildren(...beds.map(b => {
+    const card = document.createElement('button');
+    card.className = 'bedcard glass' + (b.id === 'live' ? '' : ' empty');
+    card.onclick = () => go('bed', b.id);
+    const name = document.createElement('div'); name.className = 'name'; name.textContent = bedLabel(b);
+    const line = document.createElement('div'); line.className = 'line';
+    const foot = document.createElement('div'); foot.className = 'foot';
+    if (b.id === 'live') {
+      line.textContent = !online ? 'Device offline' : st.face_ok ? 'Patient in view' : 'Patient not in view';
+      if (open.length) { const c = document.createElement('span'); c.className = 'count' + (urgent ? ' urgent' : '');
+        c.textContent = open.length + (open.length === 1 ? ' request' : ' requests') + (urgent ? ', one urgent' : ''); foot.appendChild(c); }
+      if (st && st.temp_c != null) { const t = document.createElement('span'); t.className = 'quiet'; t.textContent = st.temp_c.toFixed(1) + ' °C'; foot.appendChild(t); }
+    } else line.textContent = 'No device paired';
+    card.append(name, line, foot);
+    return card;
+  }));
+}
+
+function renderAnalytics(s) {
+  const day = s.alerts.filter(a => s.time - a.created_at < 86400);
+  const acked = day.filter(a => a.acked_at);
+  const waits = acked.map(a => a.acked_at - a.created_at).sort((a, b) => a - b);
+  $('stToday').textContent = day.length;
+  $('stWait').textContent = waits.length ? clock(waits[Math.floor(waits.length / 2)]) : '0:00';
+  $('stLong').textContent = waits.length ? clock(waits[waits.length - 1]) : '0:00';
+  $('stUrgent').textContent = day.filter(a => a.urgent).length;
+  const counts = new Map();
+  day.forEach(a => { const k = short(a.message); counts.set(k, (counts.get(k) || 0) + 1); });
+  const rows = [...counts].sort((a, b) => b[1] - a[1]), max = rows.length ? rows[0][1] : 1;
+  $('bars').replaceChildren(...rows.map(([k, n]) => {
+    const r = document.createElement('div'); r.className = 'bar';
+    const l = document.createElement('span'); l.textContent = k;
+    const i = document.createElement('i'); i.style.transform = 'scaleX(' + (n / max) + ')';
+    const b = document.createElement('b'); b.textContent = n;
+    r.append(l, i, b); return r;
+  }));
+  $('anNote').textContent = rows.length ? 'From the last ' + day.length + ' requests kept on the device.' : 'No requests in the last day.';
+}
+
+function render(s) {
+  const st = s.status, ses = s.session, cal = s.calibration;
+  bedName = s.bed;
+  chip('conn', 'Online', 'good');
+  chip('face', st.face_ok ? 'Patient in view' : 'Patient not in view', st.face_ok ? 'good' : 'bad');
+  const banner = $('banner');
+  banner.style.display = st.face_lost || st.too_slow ? 'inline-flex' : 'none';
+  banner.textContent = st.face_lost ? 'The device cannot see the patient, so requests cannot be made.'
+    : 'The device is running too slowly (' + st.fps + ' frames per second) to read gaze reliably.';
+  $('temp').innerHTML = st.temp_c == null ? 'No temperature' : st.temp_c.toFixed(1) + ' °C <small>' + (st.temp_c < 19 ? 'cool' : st.temp_c > 25 ? 'warm' : 'comfortable') + '</small>';
+  $('perf').textContent = st.fps + ' fps';
+
+  const b = beds[bedIndex], live = b.id === 'live';
+  $('bedName').textContent = bedLabel(b);
+  $('which').textContent = bedLabel(b);
+  $('bedLine').textContent = live ? (ses.state === 'prompt' ? 'Asking: ' + ses.question
+    : ses.state === 'menu' ? 'Choosing from the menu' : cal.active ? 'Calibrating' : st.face_ok ? 'Watching' : 'Patient not in view') : 'No device paired to this bed';
+  $('body').style.display = live ? '' : 'none';
+  $('unpaired').style.display = live ? 'none' : 'grid';
+  $('frame').classList.toggle('bare', !live);
+  if ($('ward').classList.contains('on')) renderWard(s);
+  if ($('analytics').classList.contains('on')) renderAnalytics(s);
+  if (!live) return;
+
+  renderAlerts(s);
+  renderScene(s);
+
+  /* Device sheet. */
   $('calibrate').firstChild.textContent = (st.gaze_mode === 'quick' ? 'Re-centre' : 'Start calibration') + ' ';
   const results = Object.entries(s.self_check).map(([k, v]) => k + ' ' + Math.round(v * 100) + '%');
   const weak = Object.entries(s.self_check).filter(([k, v]) => v < 0.7).map(([k]) => k);
-  $('calState').textContent = cal.active ? 'Calibrating' : s.calibrated ? 'Ready' : 'Not ready';
-  $('calState').className = 'tag ' + (s.calibrated && !cal.active ? 'good' : '');
+  const calText = cal.active ? 'Calibrating' : s.calibrated ? 'Ready' : 'Not ready';
+  $('calTag').textContent = calText; $('calTag').className = 'tag ' + (s.calibrated && !cal.active ? 'good' : '');
+  chip('calState', calText, s.calibrated && !cal.active ? 'good' : '');
   $('check').textContent = cal.active ? 'Calibrating: step ' + cal.step + ' of ' + cal.steps
     : cal.error ? cal.error
     : st.simulate ? 'Simulation mode: calibration is not needed.'
-    : st.gaze_mode === 'quick' ? (s.calibrated ? 'The device learned the centre from one look at the screen and keeps it up to date.' : (cal.error || 'Waiting for the patient to look at the screen.'))
+    : st.gaze_mode === 'quick' ? (s.calibrated ? 'The device learned the centre from one look at the screen and keeps it up to date.' : 'Waiting for the patient to look at the screen.')
     : !s.calibrated ? 'Not calibrated.'
     : results.length ? 'Repeat check (second look recognised from the first): ' + results.join(', ')
-        + (weak.length ? '. Not reliable: ' + weak.join(', ')
-           + '. Move these further from other targets, add light, and calibrate again.' : '')
+        + (weak.length ? '. Not reliable: ' + weak.join(', ') + '. Move these further from other targets, add light, and calibrate again.' : '')
     : 'Calibrated (loaded from last run).';
-
   const gm = st.gaze_meter;
   $('meter').textContent = !gm ? '' : !('side' in gm) ? 'Gaze: eyes not readable'
     : 'Gaze: ' + (gm.side >= 1 ? 'left' : gm.side <= -1 ? 'right' : gm.up >= 1 ? 'up' : 'centre')
-      + '. Sideways ' + gm.side.toFixed(1) + ', up ' + gm.up.toFixed(1)
-      + ' (1.0 is the trigger point; + is the patient\'s left). Head turn ' + gm.head_yaw.toFixed(2)
+      + '. Sideways ' + gm.side.toFixed(1) + ', up ' + gm.up.toFixed(1) + ' (1.0 is the trigger point; + is the patient\'s left). Head turn ' + gm.head_yaw.toFixed(2)
       + (ses.gaze ? '. Read as: ' + ses.gaze : '');
   previewOn = st.preview;
   $('previewBtn').style.display = st.simulate ? 'none' : '';
-  $('previewBtn').textContent = st.preview ? 'Hide camera view' : 'Show camera view';
-  $('previewBox').style.display = st.preview ? 'block' : 'none';
+  $('previewBtn').textContent = side === 'patient' ? 'Back to the room camera' : 'Show the patient camera';
   const ff = $('faceFrame');
   if (st.preview && st.face_box) {
     const [x1, y1, x2, y2] = st.face_box;
@@ -212,20 +661,21 @@ function render(s) {
     ff.style.width = ((x2 - x1) * 100) + '%'; ff.style.height = ((y2 - y1) * 100) + '%';
     ff.style.borderColor = st.gaze_ok ? 'var(--accent)' : 'var(--danger)';
   } else ff.style.display = 'none';
+  $('previewHint').style.display = st.preview ? 'none' : 'grid';
+  $('previewHint').textContent = st.simulate ? 'No camera in simulation mode.' : 'Turning the patient camera on.';
   if (st.preview) {
     const tips = [];
     if (st.face_width == null) tips.push('No face found: aim the camera at the patient.');
     else {
       const pct = Math.round(st.face_width * 100);
-      tips.push('Face fills ' + pct + '% of the width'
-        + (pct < 22 ? ': too far, move the camera closer.' : pct > 45 ? ': too close, move it back.' : ': good.'));
+      tips.push('Face fills ' + pct + '% of the width' + (pct < 22 ? ': too far, move the camera closer.' : pct > 45 ? ': too close, move it back.' : ': good.'));
       tips.push(st.gaze_ok ? 'Eyes readable.' : 'Eyes not readable (red frame).');
     }
-    if (st.brightness != null) tips.push('Brightness ' + st.brightness + '/255'
-      + (st.brightness < 60 ? ': too dark, add light on the face.' : st.brightness < 100 ? ': a bit dim.' : ': good.'));
+    if (st.brightness != null) tips.push('Brightness ' + st.brightness + '/255' + (st.brightness < 60 ? ': too dark, add light on the face.' : st.brightness < 100 ? ': a bit dim.' : ': good.'));
     tips.push('Mirrored view. Switches off by itself after 3 minutes.');
     $('previewHelp').textContent = tips.join(' ');
-  }
+    if (side === 'patient') $('camHelp').textContent = tips.slice(0, 2).join(' ');
+  } else $('previewHelp').textContent = '';
 
   if (s.scene) {
     const sc = s.scene;
@@ -233,16 +683,13 @@ function render(s) {
     $('sceneStatus').textContent = sc.age_s == null ? 'Waiting for the first photo from the scene camera.'
       : sc.error ? sc.error
       : (sc.age_s > 30 ? 'Scene camera silent for ' + Math.round(sc.age_s) + ' s. ' : 'Last photo ' + Math.round(sc.age_s) + ' s ago. ')
-        + 'Scan took ' + sc.ms + ' ms. Sees: '
-        + (sc.found.map(f => f.label + ' ' + Math.round(f.score * 100) + '%').join(', ') || 'nothing it knows') + '.';
+        + 'Scan took ' + sc.ms + ' ms. Sees: ' + (sc.found.map(f => f.label + ' ' + Math.round(f.score * 100) + '%').join(', ') || 'nothing it knows') + '.';
     const lines = sc.spots.map(p => p.side !== undefined
       ? (p.side ? "On the patient's " + p.side + ': ' + p.now + (p.seen ? '' : ' (not visible in the last photo)')
                 : p.now + ': too close to the screen to tell left from right. Move it further to one side.')
-      : p.zone + ': '
-      + (!p.located ? 'not found yet (expecting a ' + p.expected + ')'
+      : p.zone + ': ' + (!p.located ? 'not found yet (expecting a ' + p.expected + ')'
          : p.now + (p.now !== p.expected ? ' (was ' + p.expected + ')' : '') + (p.seen ? '' : ', not visible in the last photo')));
-    if (st.gaze_mode === 'quick') lines.unshift(sc.screen ? 'Patient screen found in the picture.'
-      : 'Patient screen not recognised: aim the scene camera so the screen is in the middle.');
+    if (st.gaze_mode === 'quick') lines.unshift(sc.screen ? 'Patient screen found in the picture.' : 'Patient screen not recognised: aim the scene camera so the screen is in the middle.');
     const list = $('spots');
     if (list.dataset.key !== lines.join('|')) {
       list.dataset.key = lines.join('|');
@@ -253,11 +700,9 @@ function render(s) {
   if (st.simulate && !debugBuilt) {
     debugBuilt = true;
     $('debug').style.display = 'flex';
-    $('simHelp').textContent = s.session.more
-      ? 'To open the MORE menu (pain, moving, toilet): press "Screen centre", then "NO" and wait 3 seconds. '
-        + 'In the menu, "YES" chooses the item shown and "NO" goes to the next one.' : '';
-    const opts = [['rest', 'Screen centre'], ['yes', 'YES'], ['no', 'NO']]
-      .concat(s.zones.map(z => [z.id, z.label]), [[null, 'Elsewhere'], ['noface', 'Face hidden']]);
+    $('simHelp').textContent = ses.more
+      ? 'To open the MORE menu (pain, moving, toilet): press "Screen centre", then "NO" and wait 3 seconds. In the menu, "YES" chooses the item shown and "NO" goes to the next one.' : '';
+    const opts = [['rest', 'Screen centre'], ['yes', 'YES'], ['no', 'NO']].concat(s.zones.map(z => [z.id, z.label]), [[null, 'Elsewhere'], ['noface', 'Face hidden']]);
     opts.forEach(([id, label]) => {
       const b = document.createElement('button');
       b.className = 'pill soft small'; b.textContent = label;
@@ -268,31 +713,35 @@ function render(s) {
 }
 
 $('calibrate').onclick = () => post('/api/calibrate');
-let previewOn = false;
-$('previewBtn').onclick = () => post('/api/preview', {on: !previewOn});
-const pv = $('preview');
-let streaming = false;
-setInterval(() => {
-  if (previewOn && !streaming) { pv.src = '/preview.mjpg?t=' + Date.now(); streaming = true; }
-  if (!previewOn && streaming) { pv.removeAttribute('src'); streaming = false; }
-}, 300);
-pv.onerror = () => { streaming = false; };
 $('relearn').onclick = () => post('/api/scene/reset');
 $('clearDone').onclick = () => post('/api/alerts/clear');
 $('setT').onclick = () => post('/api/debug/temp', {temp_c: parseFloat($('t').value)});
 $('clearT').onclick = () => post('/api/debug/temp', {temp_c: null});
-let lastMessage = 0, bedName = 'Device';
+
 function offline(text) {
-  chip('conn', text, 'bad');
-  $('banner').style.display = 'block';
-  $('banner').textContent = bedName + ': ' + text.toLowerCase() + '. The patient cannot make requests.';
+  chip('conn', text, 'bad'); chip('face', text, 'bad');
+  $('bedLine').textContent = text;
+  $('banner').style.display = 'inline-flex';
+  $('banner').textContent = text + '. The patient cannot make requests.';
+  online = false;
+  if ($('ward').classList.contains('on') && state) renderWard(state);
 }
 const es = new EventSource('/events?role=nurse');
-es.onmessage = e => { lastMessage = Date.now(); const s = JSON.parse(e.data); bedName = s.bed; render(s); };
+es.onmessage = e => { lastMessage = Date.now(); online = true; state = JSON.parse(e.data); bedName = state.bed; render(state); };
 es.onerror = () => offline('Device offline');
-setInterval(() => {
-  if (lastMessage && Date.now() - lastMessage > 3000) offline('Device not responding');
-}, 1000);
+setInterval(() => { if (lastMessage && Date.now() - lastMessage > 3000) offline('Device not responding'); }, 1000);
+window.addEventListener('resize', () => { if (state) renderScene(state); });
+
+/* Start on whatever the address says, or the sign-in sheet. */
+const as = new URLSearchParams(location.search).get('as');
+if (as === 'staff' || as === 'family') { who.role = as; localStorage.setItem('rtr.role', as); }
+applyWho();
+function route() {
+  const [view, arg] = location.hash.replace('#', '').split('/');
+  go(['ward', 'bed', 'analytics'].includes(view) ? view : 'ward', arg);
+}
+window.addEventListener('hashchange', route);
+route();
 </script>
 </body>
 </html>
