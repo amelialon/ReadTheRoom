@@ -83,14 +83,22 @@ The supervisor starts the app and restarts it if it exits or its main loop stops
 
 ## Run on the QNX Raspberry Pi
 
-Not yet tested on the device. Expected steps:
+Not yet tested on the device. Follow [docs/qnx-bringup.md](docs/qnx-bringup.md) step by step; it starts with a read-only check:
 
 ```
-sudo apk add mediapipe python3-pip
-python3 -m readtheroom --frame-file /tmp/frame.jpg
+sh qnx/first_hour.sh --sudo
 ```
 
-QNX does not expose the webcam through OpenCV, so `--frame-file` reads frames that a separate capture program writes (write to a temporary file, then rename). That capture program is not written yet. For the temperature sensor (SHT3x on I2C bus 1) the app must run as root.
+In short: QNX does not expose the webcam through OpenCV, so a small C program (`qnx/capture.c`, built on the Pi) asks QNX's camera service for frames and keeps the newest one as a JPEG, which the app reads with `--frame-file`:
+
+```
+sudo apk add mediapipe python3-pip qnx-sf-base-dev libjpeg-turbo-dev
+clang qnx/capture.c -o qnx/capture -lcamapi -lturbojpeg
+qnx/capture -u 5 -o /tmp/frame.jpg &
+python3 -m readtheroom.supervisor -- --frame-file /tmp/frame.jpg
+```
+
+For the temperature sensor (SHT3x on I2C bus 1) the app must run as root. If no camera works on the Pi, `qnx/frame_relay.py` lets a laptop's camera stand in.
 
 ## Layout
 
@@ -105,6 +113,7 @@ QNX does not expose the webcam through OpenCV, so `--frame-file` reads frames th
 | `readtheroom/supervisor.py` | Restarts the app if it stops |
 | `readtheroom/server.py`, `static/` | Patient screen and nurse station |
 | `readtheroom/config.py` | All timings and thresholds |
+| `qnx/`, `docs/qnx-bringup.md` | Camera capture for QNX, first-hour check script and the bring-up guide |
 
 ## Tests
 
@@ -115,4 +124,4 @@ python3 -m pytest
 ## Known limits
 
 - The pages have no login: anyone on the same network can acknowledge requests or start calibration.
-- Vision code (`features.py`, `camera.py`) and the sensor driver have not been run against real hardware yet.
+- Nothing under `qnx/` has been run on QNX yet, and the sensor driver has not been run against a real sensor.
