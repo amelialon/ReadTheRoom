@@ -50,6 +50,9 @@ class App:
         self._ema = Ema(cfg.ema_alpha)
         self._last = (None, False)
         self._last_frame_at: float | None = None
+        self._frame = None
+        self._gaze_ok = False
+        self._preview_until = 0.0
         self._load_calibration()
 
     def _load_calibration(self) -> None:
@@ -82,6 +85,44 @@ class App:
         self.scene.reset()
         return True
 
+    def set_preview(self, on: bool) -> bool:
+        """The camera view is for positioning during setup only. It is off by
+        default and switches itself off, so no video leaves the device in use."""
+        if self.simulate:
+            return False
+        self._preview_until = time.monotonic() + self.cfg.preview_s if on else 0.0
+        return True
+
+    def _preview_on(self) -> bool:
+        return time.monotonic() < self._preview_until
+
+    def _face_width(self):
+        box = getattr(self.extractor, "last_box", None)
+        return None if box is None else round(box[2] - box[0], 3)
+
+    def preview_jpeg(self):
+        """Small mirrored picture of what the camera sees, with the face and
+        eyes marked. None when the preview is off or there is no picture."""
+        frame = self._frame
+        if frame is None or not self._preview_on():
+            return None
+        import cv2
+
+        h, w = frame.shape[:2]
+        scale = 640 / w
+        img = cv2.resize(frame, (640, round(h * scale)))
+        ph, pw = img.shape[:2]
+        box, eyes = self.extractor.last_box, self.extractor.last_eyes
+        colour = (80, 200, 80) if self._gaze_ok else (60, 60, 230)
+        if box is not None:
+            cv2.rectangle(img, (int(box[0] * pw), int(box[1] * ph)),
+                          (int(box[2] * pw), int(box[3] * ph)), colour, 2)
+            for x, y in eyes or []:
+                cv2.circle(img, (int(x * pw), int(y * ph)), 4, (0, 220, 255), -1)
+        img = cv2.flip(img, 1)
+        ok, jpeg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        return jpeg.tobytes() if ok else None
+
     def set_debug_gaze(self, label) -> None:
         self._debug_gaze = label if isinstance(label, str) else None
 
@@ -107,7 +148,9 @@ class App:
                      or now - self._last_frame_at > self.cfg.frame_stale_s)
             return (None, False) if stale else self._last
         self._last_frame_at = now
+        self._frame = frame
         face, feature = self.extractor(frame, int(now * 1000))
+        self._gaze_ok = feature is not None
         feature = self._ema(feature)
         if self.calibrator.active:
             if self.calibrator.update(now, feature):
@@ -170,6 +213,10 @@ class App:
                 "too_slow": 0 < self._fps < self.cfg.min_fps,
                 "nurse_screens": self.hub.count("nurse"),
                 "simulate": self.simulate,
+                "preview": self._preview_on(),
+                "face_width": self._face_width(),
+                "brightness": None if self._frame is None else round(float(self._frame[::8, ::8].mean())),
+                "gaze_ok": self._gaze_ok,
             },
         })
 

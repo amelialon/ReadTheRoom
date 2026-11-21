@@ -80,6 +80,12 @@ def make_handler(hub: Hub, app):
             if url.path in PAGES:
                 with open(os.path.join(STATIC, PAGES[url.path]), "rb") as f:
                     self._send(200, f.read(), "text/html; charset=utf-8")
+            elif url.path == "/preview.jpg":
+                jpeg = app.preview_jpeg()
+                if jpeg is None:
+                    self._json(404, {"error": "preview is off"})
+                else:
+                    self._send(200, jpeg, "image/jpeg")
             elif url.path == "/health":
                 age = hub.age()
                 self._json(200, {"age_s": None if age is None else round(age, 2)})
@@ -137,6 +143,8 @@ def make_handler(hub: Hub, app):
             except ValueError:
                 return self._json(400, {"error": "bad json"})
             try:
+                if path == "/api/preview":
+                    return self._json(200, {"ok": app.set_preview(body.get("on") is True)})
                 if path == "/api/scene/reset":
                     return self._json(200, {"ok": app.reset_scene()})
                 if path == "/api/ack":

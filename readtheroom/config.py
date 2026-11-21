@@ -39,4 +39,5 @@ class Config:
     ema_alpha: float = 0.4
     loop_hz: float = 20.0
     frame_stale_s: float = 1.0
+    preview_s: float = 180.0       # camera view switches itself off after this
     min_fps: float = 5.0           # below this, holds are read unreliably

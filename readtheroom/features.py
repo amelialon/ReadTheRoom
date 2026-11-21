@@ -67,6 +67,10 @@ class FaceFeatureExtractor:
         self._mp = mp
         self._blink_threshold = blink_threshold
         self._last_ts = -1
+        # For the setup preview: where the face and eyes were in the last
+        # frame, as fractions of the picture. None when no face was found.
+        self.last_box = None
+        self.last_eyes = None
         options = vision.FaceLandmarkerOptions(
             base_options=mp_python.BaseOptions(model_asset_path=model_path),
             running_mode=vision.RunningMode.VIDEO,
@@ -84,14 +88,19 @@ class FaceFeatureExtractor:
         result = self._landmarker.detect_for_video(
             mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
         if not result.face_landmarks:
+            self.last_box = self.last_eyes = None
             return False, None
+        lm = result.face_landmarks[0]
+        xs, ys = [p.x for p in lm], [p.y for p in lm]
+        self.last_box = (min(xs), min(ys), max(xs), max(ys))
+        self.last_eyes = ([(lm[i].x, lm[i].y) for i, _, _ in EYES]
+                          if len(lm) > max(i for i, _, _ in EYES) else None)
         if not result.face_blendshapes or not result.facial_transformation_matrixes:
             return True, None
         scores = {c.category_name: c.score for c in result.face_blendshapes[0]}
         blink = (scores.get("eyeBlinkLeft", 0.0) + scores.get("eyeBlinkRight", 0.0)) / 2
         if blink > self._blink_threshold:
             return True, None
-        lm = result.face_landmarks[0]
         if len(lm) <= max(i for eye in EYES for i in eye):
             return True, None  # model without iris landmarks
         feat = [scores.get(name, 0.0) for name in LOOK]

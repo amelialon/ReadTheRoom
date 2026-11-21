@@ -51,7 +51,12 @@
 <section>
   <h2>Setup</h2>
   <button id="calibrate">Start calibration</button>
+  <button class="light" id="previewBtn">Show camera view</button>
   <div id="check"></div>
+  <div id="previewBox" style="display:none">
+    <img id="preview" alt="Camera view" style="max-width:100%;border-radius:8px;margin-top:10px">
+    <div id="previewHelp" style="font-size:14px;margin-top:6px"></div>
+  </div>
 </section>
 <section id="scene" style="display:none">
   <h2>Room scan</h2>
@@ -136,6 +141,25 @@ function render(s) {
            + '. Move these further from other targets, add light, and calibrate again.' : '')
     : 'Calibrated (loaded from last run).';
 
+  previewOn = st.preview;
+  $('previewBtn').style.display = st.simulate ? 'none' : '';
+  $('previewBtn').textContent = st.preview ? 'Hide camera view' : 'Show camera view';
+  $('previewBox').style.display = st.preview ? 'block' : 'none';
+  if (st.preview) {
+    const tips = [];
+    if (st.face_width == null) tips.push('No face found: aim the camera at the patient.');
+    else {
+      const pct = Math.round(st.face_width * 100);
+      tips.push('Face fills ' + pct + '% of the width'
+        + (pct < 22 ? ': too far, move the camera closer.' : pct > 45 ? ': too close, move it back.' : ': good.'));
+      tips.push(st.gaze_ok ? 'Eyes readable (green box).' : 'Eyes not readable (red box).');
+    }
+    if (st.brightness != null) tips.push('Brightness ' + st.brightness + '/255'
+      + (st.brightness < 60 ? ': too dark, add light on the face.' : st.brightness < 100 ? ': a bit dim.' : ': good.'));
+    tips.push('Mirrored view. Switches off by itself after 3 minutes.');
+    $('previewHelp').textContent = tips.join(' ');
+  }
+
   if (s.scene) {
     const sc = s.scene;
     $('scene').style.display = 'block';
@@ -169,6 +193,9 @@ function render(s) {
 }
 
 $('calibrate').onclick = () => post('/api/calibrate');
+let previewOn = false;
+$('previewBtn').onclick = () => post('/api/preview', {on: !previewOn});
+setInterval(() => { if (previewOn) $('preview').src = '/preview.jpg?t=' + Date.now(); }, 250);
 $('relearn').onclick = () => post('/api/scene/reset');
 $('setT').onclick = () => post('/api/debug/temp', {temp_c: parseFloat($('t').value)});
 $('clearT').onclick = () => post('/api/debug/temp', {temp_c: null});

@@ -36,7 +36,9 @@ Then run the app:
 .venv/bin/python -m readtheroom --camera 0
 ```
 
-Press "Start calibration" on the nurse page and follow the instructions on the patient screen. Calibration is saved in `data/` and reused on the next start.
+To position the camera, press "Show camera view" on the nurse page: it shows a small mirrored picture with the face and eyes marked, and says whether the face is too far, too close or too dark. The view is off by default and switches itself off after 3 minutes.
+
+Then press "Start calibration" and follow the instructions on the patient screen. Calibration is saved in `data/` and reused on the next start.
 
 ## Object detection (the scene camera)
 
