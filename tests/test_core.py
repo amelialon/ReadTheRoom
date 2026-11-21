@@ -562,3 +562,32 @@ def test_needs_table_loads_and_validates(tmp_path):
     bad.write_text(json.dumps({"zones": [], "needs": {"cup": {"question": "q"}}}))
     with pytest.raises(ValueError):
         load_needs(str(bad))
+
+
+# --- direction reading (experimental) ---------------------------------------
+
+def _look(out_l=0.0, in_l=0.0, up=0.0, down=0.0):
+    """A feature vector for eyes turned toward the patient's left (out_l) or
+    right (in_l), up or down."""
+    f = np.zeros(17)
+    f[1], f[4] = out_l, out_l      # left eye out + right eye in  = looking left
+    f[0], f[5] = in_l, in_l        # left eye in  + right eye out = looking right
+    f[2], f[6] = up, up
+    f[3], f[7] = down, down
+    return f
+
+
+def test_direction_reader_needs_only_a_centre_look():
+    from readtheroom.directions import DirectionReader
+    reader = DirectionReader()
+    assert reader.read(_look()) is None           # no centre learned yet
+    reader.set_centre([_look(out_l=0.1, up=0.05)] * 10)   # this person's "centre" is off-zero
+    assert reader.read(_look(out_l=0.1, up=0.05)) == "centre"
+    assert reader.read(_look(out_l=0.5, up=0.05)) == "left"
+    assert reader.read(_look(in_l=0.4, up=0.05)) == "right"
+    assert reader.read(_look(out_l=0.1, up=0.5)) == "up"
+    assert reader.read(_look(out_l=0.1, down=0.4)) == "down"
+    assert reader.read(_look(out_l=0.6, up=0.3)) == "left"   # diagonal: stronger axis wins
+    assert reader.read(None) is None
+    with pytest.raises(ValueError):
+        reader.set_centre([])
