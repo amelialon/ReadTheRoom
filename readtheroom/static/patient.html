@@ -9,36 +9,34 @@
 <link rel="stylesheet" href="/theme.css">
 <style>
   html, body { height: 100%; }
-  body { overflow: hidden; position: relative;
-         background: radial-gradient(120% 90% at 50% 40%, #fffdf9 0%, var(--ground) 55%, var(--ground-deep) 100%); }
+  body { overflow: hidden; position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-  /* Two answer plates float at the edges, the question floats between them. */
-  .side { position: absolute; top: 7vh; bottom: 7vh; width: 22vw; }
-  #yes { left: 2.2vw; } #no { right: 2.2vw; }
-  .side .shell, .side .core { height: 100%; }
-  .side .core { position: relative; overflow: hidden; display: grid; place-items: center; }
-  .side .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--accent-tint);
+  /* Two halves. The half being held tints from the bottom up; the labels sit in the far corners. */
+  .side { position: relative; overflow: hidden; background: var(--ground); }
+  .side .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--accent-light);
                 transition: height 100ms linear; }  /* a measurement of time, so it moves evenly */
-  .side .label { position: relative; font-size: 6.4vw; font-weight: 700; letter-spacing: -.045em;
-                 color: var(--ink-3); transition: color 500ms var(--ease), transform 500ms var(--ease); }
+  .side .label { position: absolute; bottom: 10vh; font-size: 10.4vw; font-weight: 700; letter-spacing: -.06em;
+                 line-height: .9; color: var(--ink-3); transition: color 300ms var(--ease), font-size 300ms var(--ease); }
+  #yes .label { left: 4.6vw; } #no .label { right: 4.6vw; }
   body.prompt .label, body.menu .label { color: var(--ink); }
-  body.more #no .label, body.menu #no .label { font-size: 4.6vw; color: var(--ink-2); }
+  body.more #no .label, body.menu #no .label { font-size: 7vw; color: var(--ink-2); }
+  .side.target::after, main.target .core::after { content: ""; position: absolute; inset: 0; border: 4px solid var(--accent);
+                                                  border-radius: inherit; pointer-events: none; }
 
-  main { position: absolute; left: 27vw; right: 27vw; top: 7vh; bottom: 7vh; display: grid; place-items: center; }
-  main .core { width: 100%; max-width: 760px; padding: 5vh 4vw; display: flex; flex-direction: column;
-               align-items: center; text-align: center; gap: 18px; }
-  #count { min-height: 26px; }
+  /* The sheet across the seam. */
+  main { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -56%); width: min(50vw, 760px); }
+  main .core { position: relative; padding: 5.4vh 4vw; display: flex; flex-direction: column; align-items: center;
+               text-align: center; gap: 16px; }
   #count:empty { display: none; }
   #count { display: inline-flex; }
-  #headline { font-size: clamp(30px, 3.4vw, 54px); font-weight: 700; letter-spacing: -.035em; line-height: 1.1;
-              max-width: 20ch; margin: 0; }
+  #headline { font-size: clamp(30px, 3.5vw, 56px); font-weight: 700; letter-spacing: -.04em; line-height: 1.08;
+              max-width: 18ch; margin: 0; }
   #headline.enter { animation: enter 320ms var(--ease); }
   @keyframes enter { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } }
-  body.menu #headline { font-size: clamp(40px, 5vw, 76px); }
-  #sub { font-size: clamp(15px, 1.25vw, 20px); color: var(--ink-2); line-height: 1.45; max-width: 40ch; min-height: 1.4em; }
+  body.menu #headline { font-size: clamp(40px, 5vw, 78px); }
+  #sub { font-size: clamp(15px, 1.3vw, 21px); color: var(--ink-2); line-height: 1.45; max-width: 40ch; min-height: 1.4em; }
   #bar { width: 42%; height: 4px; border-radius: 2px; background: var(--ground-deep); overflow: hidden; visibility: hidden; }
   #bar div { height: 100%; width: 0; background: var(--accent); transition: width 100ms linear; }
-  .side.target .core, main.target .core { box-shadow: var(--highlight), var(--shadow), 0 0 0 3px var(--accent); }
 
   /* Up: a thin line that fills while the patient holds a look upward. Nothing to read there. */
   #moreTop { display: none; position: absolute; top: 0; left: 40%; right: 40%; height: 4px;
@@ -47,12 +45,12 @@
                    transition: width 100ms linear; }
   #moreTop span { display: none; }
   body.slots #moreTop { display: block; }
-  body.slots .side .shell { background: transparent; box-shadow: none; }
-  body.slots .side .core { background: rgba(255, 255, 255, .55); box-shadow: none; }
+  body.slots .label { display: none; }
   body.slots #headline { font-weight: 600; color: var(--ink-2); font-size: clamp(26px, 2.6vw, 40px); }
 
   /* The island at the bottom: tracking state and any request on its way. */
-  #island { position: absolute; left: 50%; bottom: 2.4vh; transform: translateX(-50%); display: flex; align-items: center;
+  #island { position: absolute; left: 50%; bottom: 2.2vh; transform: translateX(-50%); display: flex; align-items: center;
+            max-width: 92vw; overflow: hidden;
             gap: 10px; padding: 8px 10px 8px 18px; border-radius: 999px; background: var(--plate);
             box-shadow: var(--highlight), var(--shadow-lift); font-size: 15px; white-space: nowrap;
             transition: background 300ms var(--ease); }
@@ -65,16 +63,18 @@
   #calls div.escalated { background: var(--danger-wash); color: var(--danger); }
   #calls div.acked { background: var(--accent-light); color: var(--ink); font-weight: 600; }
 
-  /* Up/down answers: YES across the top, NO across the bottom. */
-  body.vertical .side { left: 6vw; right: 6vw; width: auto; height: 19vh; top: auto; bottom: auto; }
-  body.vertical #yes { top: 2.4vh; } body.vertical #no { bottom: 9.5vh; }
-  body.vertical .side .label { font-size: 9vh; }
+  /* Up/down answers: YES is the top half, NO the bottom half. */
+  body.vertical { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); }
   body.vertical .side .fill { top: 0; right: auto; width: 0; height: 100% !important; transition: width 100ms linear; }
-  body.vertical main { left: 12vw; right: 12vw; top: 24vh; bottom: 31vh; }
+  body.vertical .side .label { bottom: auto; top: 50%; transform: translateY(-50%); font-size: 12vh; }
+  body.vertical #yes .label { left: 4vw; } body.vertical #no .label { right: 4vw; left: auto; }
+  body.vertical main { transform: translate(-50%, -50%); }
+  body.vertical #island { bottom: 2vh; }
 </style>
 </head>
 <body>
-<div class="side" id="yes"><div class="shell"><div class="core"><div class="fill"></div><span class="label">YES</span></div></div></div>
+<div class="side" id="yes"><div class="fill"></div><span class="label">YES</span></div>
+<div class="side" id="no"><div class="fill"></div><span class="label">NO</span></div>
 <main id="centre">
   <div class="shell"><div class="core">
     <span id="count" class="tag"></span>
@@ -83,7 +83,6 @@
     <div id="bar"><div></div></div>
   </div></div>
 </main>
-<div class="side" id="no"><div class="shell"><div class="core"><div class="fill"></div><span class="label">NO</span></div></div></div>
 <div id="moreTop"><div class="fill"></div><span>MORE</span></div>
 <div id="island">
   <div id="top"><span id="dot"></span><span id="status"></span></div>
@@ -107,7 +106,10 @@ function fill(id, v) {
   f.style.height = vertical ? '' : (v * 100) + '%';
   f.style.width = vertical ? (v * 100) + '%' : '';
 }
-function mode(name) { document.body.className = (vertical ? 'vertical ' : '') + name + (document.body.classList.contains('noface') ? ' noface' : ''); }
+function mode(name) {
+  document.body.className = (vertical ? 'vertical ' : '') + name
+    + (document.body.classList.contains('noface') ? ' noface' : '');
+}
 function setHeadline(text) {
   if (text === lastHeadline) return;   // the same words never re-animate
   lastHeadline = text;
@@ -120,13 +122,13 @@ function render(s) {
   const ses = s.session, cal = s.calibration, st = s.status;
   vertical = st.answer_mode === 'vertical';
   const yesWay = vertical ? 'up' : 'left', noWay = vertical ? 'down' : 'right';
+  document.body.classList.toggle('noface', !st.face_ok);
   mode('');
   ['yes', 'no', 'centre'].forEach(id => $(id).classList.remove('target'));
   fill('yes', 0); fill('no', 0);
   $('bar').style.visibility = 'hidden';
   let headline = '', sub = '', count = '', noText = 'NO', yesText = 'YES';
   const quick = st.gaze_mode === 'quick' && st.sides;
-  document.body.classList.toggle('noface', !st.face_ok);
   $('moreTop').querySelector('.fill').style.width = '0';
 
   if (cal.active) {
@@ -167,7 +169,7 @@ function render(s) {
     if (quick) {
       // Objects sit to the left and right of the screen; up opens the menu.
       // Nothing to pick from on the screen: the patient looks at the real
-      // object, and the plate on that side fills to show it has noticed.
+      // object, and that half of the screen tints to show it has noticed.
       mode('slots');
       yesText = ''; noText = '';
       headline = 'Watching for what you need';

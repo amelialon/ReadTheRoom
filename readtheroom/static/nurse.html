@@ -8,120 +8,108 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="/theme.css">
 <style>
-  body { min-height: 100dvh; padding: 0 24px 48px; }
+  body { min-height: 100dvh; padding: 0 24px 60px; }
+  #page { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
 
-  /* A floating island instead of a bar glued to the top. */
-  #island { position: sticky; top: 20px; z-index: 2; margin: 20px auto 0; width: max-content; max-width: 100%;
-            display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 20px; border-radius: 999px;
-            background: rgba(255, 255, 255, .78); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-            box-shadow: var(--highlight), var(--shadow-lift); }
-  #bed { font-weight: 700; font-size: 16px; letter-spacing: -.02em; margin-right: 6px; }
-  .chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
-          font-size: 13px; font-weight: 600; color: var(--ink-2); background: var(--plate-soft); }
-  .chip::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--ink-3); }
+  /* Header: a hairline, not a bar. */
+  header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 24px; padding: 44px 0 18px; border-bottom: 1px solid var(--edge); }
+  #bed { font-size: 34px; font-weight: 700; letter-spacing: -.04em; margin-right: auto; }
+  .chip { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; color: var(--ink-2); }
+  .chip::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--ink-3); }
   .chip.good::before { background: var(--accent); }
-  .chip.bad { color: var(--danger); background: var(--danger-wash); }
-  .chip.bad::before { background: var(--danger); }
-  #perf { color: var(--ink-3); }
-  #perf::before { display: none; }
+  .chip.bad { color: var(--danger); } .chip.bad::before { background: var(--danger); }
+  #perf { color: var(--ink-3); } #perf::before { display: none; }
 
-  #banner { display: none; max-width: 1240px; margin: 20px auto 0; padding: 14px 20px; border-radius: var(--r-md);
-            background: var(--danger-wash); color: var(--danger); font-weight: 600; }
+  #banner { display: none; padding: 14px 20px; border-radius: var(--r-md); background: var(--danger-wash); color: var(--danger); font-weight: 600; }
 
-  /* The bento: requests large on the left, the device's state stacked on the right. */
-  #grid { max-width: 1240px; margin: 28px auto 0; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr));
-          gap: 20px; }
-  .tile { grid-column: span 12; }
-  .tile .core { padding: 26px 28px; display: flex; flex-direction: column; gap: 16px; height: 100%; }
-  @media (min-width: 900px) {
-    #requests { grid-column: span 7; grid-row: span 2; }
-    #patient, #scene { grid-column: span 5; }
-  }
-  h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.03em; }
-  .head { display: flex; align-items: center; gap: 12px; }
-  .head .tag { margin-left: auto; }
-  .note { font-size: 14px; color: var(--ink-2); line-height: 1.5; }
-  .quiet { font-size: 13px; color: var(--ink-3); line-height: 1.5; }
-  a { color: var(--ink-2); }
-
-  /* Requests: soft plates, newest first. */
-  #alerts { display: flex; flex-direction: column; gap: 10px; }
-  .alert { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: var(--r-lg);
-           background: var(--plate-soft);
-           transition: background 240ms var(--ease), opacity 400ms var(--ease), transform 260ms var(--ease); }
-  /* A new request rises into the list instead of appearing from nothing. */
+  /* Requests: hairline rows, the waiting time as a numeral on the left. */
+  .section-head { display: flex; align-items: baseline; gap: 14px; }
+  .section-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-deep); }
+  #alerts { display: flex; flex-direction: column; }
+  .alert { display: grid; grid-template-columns: 120px 1fr auto; gap: 24px; align-items: center; padding: 22px 20px; margin: 0 -20px;
+           border-bottom: 1px solid var(--edge); transition: background 240ms var(--ease), opacity 400ms var(--ease), transform 260ms var(--ease); }
   @starting-style { .alert { opacity: 0; transform: translateY(8px); } }
-  .alert .body { margin-right: auto; display: flex; flex-direction: column; gap: 4px; }
-  .alert .msg { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
-  .alert .meta { font-size: 13px; color: var(--ink-2); }
+  .alert .time { font-size: 40px; font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+  .alert .body { display: flex; flex-direction: column; gap: 4px; }
+  .alert .msg { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  .alert .meta { font-size: 14px; color: var(--ink-2); }
   .alert.pending { background: var(--blush); }
-  .alert.escalated { background: var(--danger-wash); }
-  .alert.escalated .meta { color: var(--danger); font-weight: 600; }
-  .alert.acked { opacity: .55; }
+  .alert.escalated .time, .alert.escalated .meta { color: var(--danger); }
+  .alert.escalated .meta { font-weight: 600; }
+  .alert.acked { color: var(--ink-3); }
+  .alert.acked .time, .alert.acked .meta { color: var(--ink-3); }
+  .alert.acked .msg { font-weight: 600; }
   .alert.acked .pill { display: none; }
-  #empty { padding: 36px 0; text-align: center; color: var(--ink-3); }
+  #empty { padding: 28px 0; color: var(--ink-3); }
 
-  /* Camera view with a soft frame around the face. */
+  /* Device state in two columns under the list. */
+  #device { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
+  @media (max-width: 760px) { #device { grid-template-columns: 1fr; } .alert { grid-template-columns: 90px 1fr; } .alert .pill { grid-column: 2; justify-self: start; } }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .note { font-size: 15px; color: var(--ink-2); line-height: 1.5; }
+  .quiet { font-size: 13px; color: var(--ink-3); line-height: 1.5; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  a { color: var(--ink-2); }
   #previewBox { display: none; }
-  #previewWrap { position: relative; display: inline-block; line-height: 0; border-radius: var(--r-md); overflow: hidden;
-                 box-shadow: 0 0 0 1px var(--edge); }
+  #previewWrap { position: relative; display: inline-block; line-height: 0; border-radius: var(--r-md); overflow: hidden; box-shadow: 0 0 0 1px var(--edge); }
   #preview { max-width: 100%; display: block; }
   #faceFrame { position: absolute; display: none; border: 2px solid var(--accent); border-radius: 28%; pointer-events: none; }
-  #calState.good { color: var(--accent-deep); }
-  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   #spots { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
   #debug { display: none; }
-  input { font: inherit; padding: 9px 12px; width: 96px; border-radius: 999px; border: 0; background: var(--plate-soft);
-          box-shadow: 0 0 0 1px var(--edge); }
+  input { font: inherit; padding: 9px 12px; width: 96px; border-radius: 999px; border: 0; background: var(--plate); box-shadow: 0 0 0 1px var(--edge); }
   #gaze { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill.small { padding: 8px 14px; font-size: 13px; }
 </style>
 </head>
 <body>
-<div id="island">
-  <span id="bed">Read the Room</span>
-  <span class="chip" id="conn">Connecting</span>
-  <span class="chip" id="face"></span>
-  <span class="chip" id="temp"></span>
-  <span class="chip" id="perf"></span>
-</div>
-<div id="banner"></div>
-<div id="grid">
-  <section class="tile shell arrive" id="requests"><div class="core">
-    <div class="head"><h2>Requests</h2>
-      <button class="pill soft" id="clearDone" style="padding:8px 14px;font-size:13px">Clear answered</button></div>
+<div id="page">
+  <header>
+    <span id="bed">Read the Room</span>
+    <span class="chip" id="conn">Connecting</span>
+    <span class="chip" id="face"></span>
+    <span class="chip" id="temp"></span>
+    <span class="chip" id="perf"></span>
+  </header>
+  <div id="banner"></div>
+
+  <section>
+    <div class="section-head"><h2>Requests</h2>
+      <button class="pill soft small" id="clearDone" style="margin-left:auto">Clear answered</button></div>
     <div id="empty">No requests yet.</div>
     <div id="alerts"></div>
-  </div></section>
+  </section>
 
-  <section class="tile shell arrive" id="patient"><div class="core">
-    <div class="head"><h2>Patient</h2><span class="tag" id="calState"></span></div>
-    <div class="note" id="check"></div>
-    <div class="quiet" id="meter"></div>
-    <div class="row">
-      <button class="pill" id="calibrate">Start calibration <span class="go">&#8594;</span></button>
-      <button class="pill soft" id="previewBtn">Show camera view</button>
-      <a href="/room" target="_blank" style="font-size:14px">Room view</a>
+  <section id="device">
+    <div class="col" id="patient">
+      <div class="section-head"><h2>Patient</h2><span class="tag" id="calState" style="margin-left:auto"></span></div>
+      <div class="note" id="check"></div>
+      <div class="quiet" id="meter"></div>
+      <div class="row">
+        <button class="pill" id="calibrate">Start calibration <span class="go">&#8594;</span></button>
+        <button class="pill soft" id="previewBtn">Show camera view</button>
+      </div>
+      <div id="previewBox">
+        <div id="previewWrap"><img id="preview" alt="Camera view"><div id="faceFrame"></div></div>
+        <div class="note" id="previewHelp" style="margin-top:8px"></div>
+      </div>
     </div>
-    <div id="previewBox">
-      <div id="previewWrap"><img id="preview" alt="Camera view"><div id="faceFrame"></div></div>
-      <div class="note" id="previewHelp" style="margin-top:8px"></div>
+    <div class="col" id="scene" style="display:none">
+      <div class="section-head"><h2>Room scan</h2>
+        <button class="pill soft small" id="relearn" style="margin-left:auto">Learn spots again</button></div>
+      <div class="note" id="sceneStatus"></div>
+      <ul id="spots"></ul>
+      <a href="/room" target="_blank" style="font-size:15px">Open room view</a>
     </div>
-  </div></section>
+  </section>
 
-  <section class="tile shell arrive" id="scene" style="display:none"><div class="core">
-    <div class="head"><h2>Room scan</h2><button class="pill soft" id="relearn" style="margin-left:auto;padding:8px 14px;font-size:13px">Learn spots again</button></div>
-    <div class="note" id="sceneStatus"></div>
-    <ul id="spots"></ul>
-  </div></section>
-
-  <section class="tile shell arrive" id="debug"><div class="core">
-    <div class="head"><h2>Simulation</h2><span class="tag">Where the patient is looking</span></div>
+  <section class="col" id="debug">
+    <div class="section-head"><h2>Simulation</h2><span class="quiet" style="margin-left:auto">Where the patient is looking</span></div>
     <div id="gaze"></div>
     <p class="note" id="simHelp" style="margin:0"></p>
     <div class="row">Room temperature °C <input id="t" type="number" step="0.5">
-      <button class="pill soft" id="setT" style="padding:8px 14px;font-size:13px">Set</button>
-      <button class="pill soft" id="clearT" style="padding:8px 14px;font-size:13px">Clear</button></div>
-  </div></section>
+      <button class="pill soft small" id="setT">Set</button>
+      <button class="pill soft small" id="clearT">Clear</button></div>
+  </section>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -140,6 +128,7 @@ function beep(freq, n) {
   }
 }
 function chip(id, text, cls) { $(id).textContent = text; $(id).className = 'chip ' + (cls || ''); }
+function clock(seconds) { const m = Math.floor(seconds / 60), s = seconds % 60; return m + ':' + String(s).padStart(2, '0'); }
 
 function render(s) {
   const st = s.status, ses = s.session;
@@ -160,9 +149,10 @@ function render(s) {
     let el = cards.get(a.id);
     if (!el) {
       el = document.createElement('div');
+      const time = document.createElement('div'); time.className = 'time';
       const body = document.createElement('div'); body.className = 'body';
       const msg = document.createElement('div'); msg.className = 'msg';
-      msg.textContent = a.message.replace(/^[^:]*: patient /, (m) => '').replace(/^\w/, c => c.toUpperCase());
+      msg.textContent = a.message.replace(/^[^:]*: patient /, '').replace(/^\w/, c => c.toUpperCase());
       const meta = document.createElement('div'); meta.className = 'meta';
       const btn = document.createElement('button'); btn.className = 'pill';
       btn.innerHTML = '<span class="label">On my way</span> <span class="go">&#8594;</span>';
@@ -171,16 +161,16 @@ function render(s) {
         btn.querySelector('.label').textContent = 'On the way';
         post('/api/ack', {id: a.id});
       };
-      body.append(msg, meta); el.append(body, btn);
+      body.append(msg, meta); el.append(time, body, btn);
       $('alerts').prepend(el);
       cards.set(a.id, el);
     }
     el.className = 'alert ' + a.state;
     const at = new Date(a.created_at * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
     const wait = Math.max(0, Math.round((a.acked_at || s.time) - a.created_at));
-    el.querySelector('.meta').textContent = a.state === 'acked'
-      ? at + ', answered after ' + wait + ' s'
-      : (a.urgent ? 'Urgent. ' : a.state === 'escalated' ? 'Overdue. ' : '') + at + ', waiting ' + wait + ' s';
+    el.querySelector('.time').textContent = clock(wait);
+    el.querySelector('.meta').textContent = a.state === 'acked' ? 'Answered, ' + at
+      : (a.urgent ? 'Urgent, ' : a.state === 'escalated' ? 'Overdue, ' : 'Waiting, ') + at;
     if (seen.get(a.id) !== a.state) {
       if (a.state === 'escalated') beep(880, 3); else if (a.state === 'pending') beep(660, 1);
       seen.set(a.id, a.state);
@@ -262,7 +252,7 @@ function render(s) {
 
   if (st.simulate && !debugBuilt) {
     debugBuilt = true;
-    $('debug').style.display = 'block';
+    $('debug').style.display = 'flex';
     $('simHelp').textContent = s.session.more
       ? 'To open the MORE menu (pain, moving, toilet): press "Screen centre", then "NO" and wait 3 seconds. '
         + 'In the menu, "YES" chooses the item shown and "NO" goes to the next one.' : '';
@@ -270,7 +260,7 @@ function render(s) {
       .concat(s.zones.map(z => [z.id, z.label]), [[null, 'Elsewhere'], ['noface', 'Face hidden']]);
     opts.forEach(([id, label]) => {
       const b = document.createElement('button');
-      b.className = 'pill soft'; b.style.cssText = 'padding:8px 14px;font-size:13px'; b.textContent = label;
+      b.className = 'pill soft small'; b.textContent = label;
       b.onclick = () => post('/api/debug/gaze', {label: id});
       $('gaze').appendChild(b);
     });
