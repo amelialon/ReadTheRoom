@@ -10,8 +10,8 @@
   --r-lg: 24px;
   --r-md: 16px;
 
-  /* Paper, graphite and one green. The green is decisive rather than pastel,
-     and it is the only colour apart from red, which is kept for danger. */
+  /* Paper ground, graphite text, the sage and blush from the chosen palette.
+     Red is kept for danger only. */
   --ground: #f2f1ec;
   --ground-deep: #e9e7e0;
   --shell: rgba(40, 42, 38, .06);
@@ -21,13 +21,13 @@
   --ink: #1e211f;
   --ink-2: #5f645f;
   --ink-3: #9a9e98;
-  --accent: #2f6b55;           /* marks, rings, text: reads as a real colour */
-  --accent-deep: #24533f;
-  --accent-light: #8fc3a7;     /* fills */
+  --accent: #84a282;           /* your sage: marks, rings, large labels */
+  --accent-deep: #5e7a5e;      /* the same green, deepened only where it must be read as small text */
+  --accent-light: #b8cfb3;     /* your light sage: fills */
   --accent-ink: #ffffff;
-  --accent-tint: rgba(143, 195, 167, .38);
-  --accent-wash: #e4f0ea;
-  --blush: #e4f0ea;            /* something on its way to the nurse (same green, pale) */
+  --accent-tint: rgba(184, 207, 179, .5);
+  --accent-wash: #e6eee3;
+  --blush: #f6e2e9;            /* your blush: something on its way to the nurse */
   --danger: #b4332a;
   --danger-wash: #f6e3e0;
   --shadow: 0 1px 2px rgba(40, 42, 38, .04), 0 24px 60px -24px rgba(40, 42, 38, .2);
