@@ -73,6 +73,7 @@ def db():
         started = True
         dsn = f"postgresql://{user}@127.0.0.1:{port}/postgres"
         conn = psycopg.connect(dsn, autocommit=True)
+        conn.test_dsn = dsn  # local cluster only; tests must not use DATABASE_URL
         conn.execute(
             """
             do $$

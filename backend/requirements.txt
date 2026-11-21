@@ -1,3 +1,7 @@
-# Schema tests only. The FastAPI service is a later change.
-psycopg[binary]>=3.2
+# Central API. The bedside app keeps its own requirements.txt.
+fastapi>=0.115,<0.116
+uvicorn>=0.32
+pydantic-settings>=2.6,<3
+psycopg[binary,pool]>=3.2
+httpx>=0.27
 pytest>=8
