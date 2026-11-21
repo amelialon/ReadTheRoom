@@ -87,16 +87,16 @@ Workstreams (adjust to team size): (A) QNX platform — camera, packages, proces
 
 ## 5. Demo and pitch
 
-Demo (2–3 min): a teammate sits as the patient, already calibrated. They look at the glass → prompt → look left for YES → the judge's phone or the laptop shows "Bed 4: thirsty". Then warm the sensor with a hand → "Are you too warm?". Then unplug the network → device keeps working and queues the alert. If a judge wants to try, run the 15-second 4-zone quick calibration.
+Demo (2–3 min): a teammate sits as the patient, already calibrated. They look at the glass → prompt → look left for YES → the judge's phone or the laptop shows "Bed 4: thirsty". Then warm the sensor with a hand → "Are you too warm?". Then unplug the network → device keeps working and queues the alert. If a judge wants to try, run the calibration (about 40 seconds; a shorter quick mode is not built). The full script is in docs/demo-script.md.
 
-Numbers for the pitch (verify the source before putting each on a slide):
-- Patients with communication problems had 3× the odds of a preventable adverse event (Bartlett, CMAJ 2008).
+Numbers for the pitch (checked against the original papers; exact wording, sample sizes and links are in docs/pitch-facts.md):
+- Patients with communication problems had 3× the odds of a preventable adverse event (Bartlett, CMAJ 2008). "Communication problems" there includes language barriers and deafness, not only patients who cannot speak.
 - 37.7% of pain communications with ventilated patients failed (Happ 2011).
-- 70.8% of ICU patients rated thirst their most intense symptom.
-- Over half of ventilated patients could communicate if given a tool (Happ 2015).
-- Dedicated eye-gaze devices cost about US$7,000–15,000; ours is about $100 of hardware (our estimate).
+- Thirst was reported in 70.8% of symptom assessments of ICU patients at high risk of dying, and was the most intense of ten symptoms (Puntillo 2010). These are two separate findings; do not merge them.
+- 53.9% of ventilated patients met basic communication criteria and "could potentially be served by assistive communication tools" (Happ 2015).
+- Cost: no manufacturer price for eye-gaze devices could be confirmed, so do not quote a range. A citable figure is Virginia Medicaid's 2026 rate of US$8,681 for a speech-generating device, eye tracking extra. Do not state a cost for our hardware until there is a real parts list.
 
-Positioning: a low-cost first layer for basic needs that complements full eye-gaze communication devices, not a replacement. The closest prior work (Eid 2016, SceneTalk 2017) was lab prototypes with simulated recognition or on-screen selection.
+Positioning: a low-cost first layer for basic needs that complements full eye-gaze communication devices, not a replacement. The closest prior work is a 2016 University of Hagen prototype (Eidam, Garstka and Peters; described as using simulated recognition, not confirmed from the paper itself) and SceneTalk 2017, which used real image recognition but selection on a screen.
 
 For PCBWay: show the "next version" — a carrier board with the sensor, an IR LED ring and IR camera for night use, speaker, and a bed-rail clamp enclosure.
 
