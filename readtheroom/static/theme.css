@@ -1,0 +1,86 @@
+/* Read the Room: the shared look of the patient screen, nurse station and
+   room view. Silver-grey ground, white plates that sit in a soft tray
+   (a shell with a thin edge around an inner core), one attention colour,
+   red only for urgent and offline. One easing everywhere. */
+
+:root {
+  --font: "Plus Jakarta Sans", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI Variable", system-ui, sans-serif;
+  --ease: cubic-bezier(.32, .72, 0, 1);
+  --r-xl: 32px;
+  --r-lg: 24px;
+  --r-md: 16px;
+
+  --ground: #eceff2;
+  --ground-deep: #e3e7eb;
+  --shell: rgba(16, 24, 32, .05);
+  --edge: rgba(16, 24, 32, .06);
+  --plate: #ffffff;
+  --plate-soft: #f4f6f8;
+  --ink: #171c22;
+  --ink-2: #5d6975;
+  --ink-3: #98a3ad;
+  --accent: #d9622b;
+  --accent-ink: #fff4ee;
+  --accent-tint: rgba(217, 98, 43, .14);
+  --accent-wash: #fbeee7;
+  --danger: #c6362a;
+  --danger-wash: #fbebe9;
+  --shadow: 0 1px 2px rgba(16, 24, 32, .04), 0 24px 60px -24px rgba(16, 24, 32, .18);
+  --shadow-lift: 0 2px 4px rgba(16, 24, 32, .04), 0 40px 90px -30px rgba(16, 24, 32, .26);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, .9);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* A plate in a tray: the shell carries the edge, the core carries the content. */
+.shell { background: var(--shell); box-shadow: 0 0 0 1px var(--edge); border-radius: var(--r-xl); padding: 6px; }
+.core  { background: var(--plate); border-radius: calc(var(--r-xl) - 6px); box-shadow: var(--highlight), var(--shadow); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 11px 14px 11px 20px; border-radius: 999px; border: 0;
+  background: var(--ink); color: var(--plate); font: inherit; font-weight: 600; font-size: 15px;
+  cursor: pointer; transition: transform 500ms var(--ease), background 500ms var(--ease);
+}
+.pill:active { transform: scale(.98); }
+.pill .go {
+  width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, .14); font-size: 15px; line-height: 1;
+  transition: transform 500ms var(--ease);
+}
+.pill:hover .go { transform: translate(2px, -1px) scale(1.05); }
+.pill.soft { background: var(--plate-soft); color: var(--ink); box-shadow: 0 0 0 1px var(--edge); }
+.pill.soft .go { background: rgba(16, 24, 32, .06); }
+.pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px; border-radius: 999px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2);
+  background: var(--plate-soft); box-shadow: 0 0 0 1px var(--edge);
+}
+.tag .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ink-3); }
+.tag.good .dot { background: var(--accent); }
+.tag.bad { color: var(--danger); }
+.tag.bad .dot { background: var(--danger); }
+
+/* Arrive: a heavy, slow fade-up used once, when a page opens. */
+.arrive { animation: arrive 900ms var(--ease) both; }
+.arrive:nth-child(2) { animation-delay: 80ms; }
+.arrive:nth-child(3) { animation-delay: 160ms; }
+.arrive:nth-child(4) { animation-delay: 240ms; }
+.arrive:nth-child(5) { animation-delay: 320ms; }
+@keyframes arrive { from { opacity: 0; transform: translateY(28px); filter: blur(6px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation: none !important; }
+}

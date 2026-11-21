@@ -4,85 +4,94 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Read the Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="/theme.css">
 <style>
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
-  body { background: #0b0f14; color: #e8edf2; font-family: system-ui, sans-serif;
-         display: grid; grid-template-columns: 24% 1fr 24%; overflow: hidden; }
-  .side { position: relative; display: flex; align-items: center; justify-content: center;
-          font-size: 9vw; font-weight: 800; letter-spacing: .02em; color: #2a3340;
-          border: 6px solid #161d26; transition: color .2s, border-color .2s; }
-  .side .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
-                opacity: .35; transition: height .1s linear; }
-  .side span { position: relative; }
-  #yes .fill { background: #2fbf71; } #no .fill { background: #e5534b; }
-  body.prompt #yes, body.menu #yes { color: #2fbf71; border-color: #2fbf71; }
-  body.prompt #no { color: #e5534b; border-color: #e5534b; }
-  /* MORE and NEXT are not a "no", so they are not red. */
-  body.more #no { color: #5b7fa6; border-color: #24364b; }
-  body.menu #no { color: #6cb0ff; border-color: #6cb0ff; }
-  body.more #no .fill, body.menu #no .fill { background: #6cb0ff; }
-  body.more #no, body.menu #no { font-size: 6.5vw; }
-  .side.target { color: #f5c542 !important; border-color: #f5c542 !important; }
-  main { display: flex; flex-direction: column; align-items: center; justify-content: center;
-         padding: 4vw; text-align: center; }
-  main.target { outline: 6px solid #f5c542; outline-offset: -6px; }
-  #headline { font-size: 4.2vw; font-weight: 700; line-height: 1.15; }
-  #sub { margin-top: 2vw; font-size: 1.7vw; color: #8b98a8; min-height: 2em; }
-  #bar { margin-top: 2vw; width: 60%; height: 10px; background: #161d26; border-radius: 5px;
-         overflow: hidden; visibility: hidden; }
-  #bar div { height: 100%; width: 0; background: #f5c542; }
-  /* Status sits at the bottom: anything at the top edge pulls the eyes up,
-     and looking up is how the menu opens. */
-  #top { position: fixed; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 15px;
-         color: #8b98a8; }
-  #dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-         background: #e5534b; margin-right: 6px; }
-  #dot.ok { background: #2fbf71; }
-  #calls { position: fixed; bottom: 40px; left: 0; right: 0; }
-  #calls div { padding: 12px 18px; font-size: 1.8vw; text-align: center; background: #1b2a3f; }
-  #calls div.escalated { background: #5a1f1c; }
-  #calls div.acked { background: #17402b; }
-  #count { font-size: 1.9vw; color: #8b98a8; margin-bottom: 1.5vw; min-height: 1.2em; }
-  body.menu #headline { font-size: 7vw; }
+  html, body { height: 100%; }
+  body { overflow: hidden; position: relative;
+         background: radial-gradient(120% 90% at 50% 40%, #f3f5f7 0%, var(--ground) 55%, var(--ground-deep) 100%); }
+
+  /* Two answer plates float at the edges, the question floats between them. */
+  .side { position: absolute; top: 7vh; bottom: 7vh; width: 22vw; }
+  #yes { left: 2.2vw; } #no { right: 2.2vw; }
+  .side .shell, .side .core { height: 100%; }
+  .side .core { position: relative; overflow: hidden; display: grid; place-items: center; }
+  .side .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--accent-tint);
+                transition: height 100ms linear; }  /* a measurement of time, so it moves evenly */
+  .side .label { position: relative; font-size: 6.4vw; font-weight: 700; letter-spacing: -.045em;
+                 color: var(--ink-3); transition: color 500ms var(--ease), transform 500ms var(--ease); }
+  body.prompt .label, body.menu .label { color: var(--ink); }
+  body.prompt #yes .label, body.menu #yes .label { color: var(--accent); }
+  body.more #no .label, body.menu #no .label { font-size: 4.6vw; color: var(--ink-2); }
+  .side.target .core, main.target .core { box-shadow: var(--highlight), var(--shadow), 0 0 0 3px var(--accent); }
+
+  main { position: absolute; left: 27vw; right: 27vw; top: 7vh; bottom: 7vh; display: grid; place-items: center; }
+  main .core { width: 100%; max-width: 760px; padding: 5vh 4vw; display: flex; flex-direction: column;
+               align-items: center; text-align: center; gap: 18px; }
+  #count { min-height: 26px; }
+  #count:empty { display: none; }
+  #count { display: inline-flex; }
+  #headline { font-size: clamp(30px, 3.4vw, 54px); font-weight: 700; letter-spacing: -.035em; line-height: 1.1;
+              max-width: 20ch; margin: 0; }
+  #headline.enter { animation: enter 450ms var(--ease); }
+  @keyframes enter { from { opacity: 0; transform: translateY(14px); filter: blur(5px); } }
+  body.menu #headline { font-size: clamp(40px, 5vw, 76px); }
+  #sub { font-size: clamp(15px, 1.25vw, 20px); color: var(--ink-2); line-height: 1.45; max-width: 40ch; min-height: 1.4em; }
+  #bar { width: 42%; height: 4px; border-radius: 2px; background: var(--ground-deep); overflow: hidden; visibility: hidden; }
+  #bar div { height: 100%; width: 0; background: var(--accent); transition: width 100ms linear; }
+
+  /* Up: a thin line that fills while the patient holds a look upward. Nothing to read there. */
+  #moreTop { display: none; position: absolute; top: 0; left: 40%; right: 40%; height: 4px;
+             background: var(--ground-deep); border-radius: 0 0 4px 4px; overflow: hidden; }
+  #moreTop .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent);
+                   transition: width 100ms linear; }
+  #moreTop span { display: none; }
+  body.slots #moreTop { display: block; }
+  body.slots .side .shell { background: transparent; box-shadow: none; }
+  body.slots .side .core { background: rgba(255, 255, 255, .55); box-shadow: none; }
+  body.slots #headline { font-weight: 600; color: var(--ink-2); font-size: clamp(26px, 2.6vw, 40px); }
+
+  /* The island at the bottom: tracking state and any request on its way. */
+  #island { position: absolute; left: 50%; bottom: 2.4vh; transform: translateX(-50%); display: flex; align-items: center;
+            gap: 10px; padding: 8px 10px 8px 18px; border-radius: 999px; background: var(--plate);
+            box-shadow: var(--highlight), var(--shadow-lift); font-size: 15px; white-space: nowrap;
+            transition: transform 600ms var(--ease); }
+  #top { display: flex; align-items: center; gap: 9px; color: var(--ink-2); }
+  #dot { width: 7px; height: 7px; border-radius: 999px; background: var(--danger); }
+  #dot.ok { background: var(--accent); }
+  #calls { display: contents; }
+  #calls div { padding: 8px 16px; border-radius: 999px; background: var(--accent-wash); color: var(--ink); font-weight: 600; }
+  #calls div.escalated { background: var(--danger-wash); color: var(--danger); }
+  #calls div.acked { background: var(--plate-soft); color: var(--ink-2); font-weight: 500; }
 
   /* Up/down answers: YES across the top, NO across the bottom. */
-  /* A thin bar that only fills while the patient is holding a look upward;
-     there is no label at the top edge to look at. */
-  #moreTop { display: none; position: fixed; top: 0; left: 30%; right: 30%; height: 10px;
-             border-radius: 0 0 8px 8px; background: #161d26; overflow: hidden; }
-  #moreTop .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #6cb0ff;
-                   transition: width .1s linear; }
-  #moreTop span { display: none; }
-  body.slots .side { border-color: #131a22; }
-  body.slots main #headline { font-size: 3.2vw; color: #b9c4d0; }
-  body.slots #yes .fill, body.slots #no .fill { background: #6cb0ff; }
-  body.slots #moreTop { display: block; }
-  body.vertical { grid-template-columns: 1fr; grid-template-rows: 22% 1fr 22%; }
-  body.vertical .side { font-size: 13vh; }
-  body.vertical.more #no, body.vertical.menu #no { font-size: 11vh; }
-  body.vertical .side .fill { top: 0; right: auto; width: 0; height: 100% !important;
-                              transition: width .1s linear; }
-  body.vertical main { padding: 1vw 4vw; }
-  body.vertical #top { top: calc(22% + 10px); }
-  body.vertical #calls { bottom: 22%; }
+  body.vertical .side { left: 6vw; right: 6vw; width: auto; height: 19vh; top: auto; bottom: auto; }
+  body.vertical #yes { top: 2.4vh; } body.vertical #no { bottom: 9.5vh; }
+  body.vertical .side .label { font-size: 9vh; }
+  body.vertical .side .fill { top: 0; right: auto; width: 0; height: 100% !important; transition: width 100ms linear; }
+  body.vertical main { left: 12vw; right: 12vw; top: 24vh; bottom: 31vh; }
 </style>
 </head>
 <body>
-<div class="side" id="yes"><div class="fill"></div><span>YES</span></div>
+<div class="side" id="yes"><div class="shell"><div class="core"><div class="fill"></div><span class="label">YES</span></div></div></div>
 <main id="centre">
-  <div id="count"></div>
-  <div id="headline">Connecting…</div>
-  <div id="sub"></div>
-  <div id="bar"><div></div></div>
+  <div class="shell"><div class="core">
+    <span id="count" class="tag"></span>
+    <h1 id="headline">Connecting</h1>
+    <div id="sub"></div>
+    <div id="bar"><div></div></div>
+  </div></div>
 </main>
-<div class="side" id="no"><div class="fill"></div><span>NO</span></div>
-<div id="top"><span id="dot"></span><span id="status"></span></div>
-<div id="moreTop"><div class="fill"></div><span>MORE &#8593;</span></div>
-<div id="calls"></div>
+<div class="side" id="no"><div class="shell"><div class="core"><div class="fill"></div><span class="label">NO</span></div></div></div>
+<div id="moreTop"><div class="fill"></div><span>MORE</span></div>
+<div id="island">
+  <div id="top"><span id="dot"></span><span id="status"></span></div>
+  <div id="calls"></div>
+</div>
 <script>
 const $ = id => document.getElementById(id);
-let audio = null, lastState = null, lastItem = null;
+let audio = null, lastState = null, lastItem = null, lastHeadline = '';
 document.addEventListener('pointerdown', () => { audio = audio || new AudioContext(); }, {once: true});
 function chime(freq) {
   if (!audio) return;
@@ -99,6 +108,13 @@ function fill(id, v) {
   f.style.width = vertical ? (v * 100) + '%' : '';
 }
 function mode(name) { document.body.className = (vertical ? 'vertical ' : '') + name; }
+function setHeadline(text) {
+  if (text === lastHeadline) return;   // the same words never re-animate
+  lastHeadline = text;
+  const h = $('headline');
+  h.textContent = text;
+  h.classList.remove('enter'); void h.offsetWidth; h.classList.add('enter');
+}
 
 function render(s) {
   const ses = s.session, cal = s.calibration, st = s.status;
@@ -113,8 +129,9 @@ function render(s) {
   $('moreTop').querySelector('.fill').style.width = '0';
 
   if (cal.active) {
+    count = 'Setting up';
     headline = cal.instruction;
-    sub = cal.recording ? 'Keep looking…' : 'Get ready';
+    sub = cal.recording ? 'Keep looking' : 'Get ready';
     const el = {yes: 'yes', no: 'no', rest: 'centre'}[cal.target];
     if (el) $(el).classList.add('target');
     $('bar').style.visibility = 'visible';
@@ -127,30 +144,32 @@ function render(s) {
     sub = cal.error || 'Ask staff to start calibration.';
   } else if (ses.state === 'prompt') {
     mode('prompt');
+    count = 'Question';
     headline = ses.question;
-    sub = 'Look ' + yesWay + ' for YES, ' + noWay + ' for NO, and hold.';
+    sub = 'Look ' + yesWay + ' for yes, ' + noWay + ' for no, and hold.';
     if (ses.leader === 'yes') fill('yes', ses.progress);
     if (ses.leader === 'no') fill('no', ses.progress);
   } else if (ses.state === 'menu') {
     mode('menu');
     noText = ses.menu.index + 1 < ses.menu.count ? 'NEXT' : 'CLOSE';
-    count = 'Do you need this?  ' + (ses.menu.index + 1) + ' of ' + ses.menu.count;
+    count = 'Do you need this  ' + (ses.menu.index + 1) + ' of ' + ses.menu.count;
     headline = ses.menu.label;
-    sub = 'Look ' + yesWay + ' and hold for YES. Your nurse is told straight away. '
-      + 'Look ' + noWay + ' and hold for ' + noText + '.';
+    sub = 'Look ' + yesWay + ' and hold for yes. Your nurse is told straight away. '
+      + 'Look ' + noWay + ' and hold for ' + noText.toLowerCase() + '.';
     if (ses.leader === 'yes') fill('yes', ses.progress);
     if (ses.leader === 'no') fill('no', ses.progress);
   } else if (ses.state === 'sent') {
-    headline = 'Sent to your nurse';
+    count = 'Sent';
+    headline = 'Your nurse has been told';
   } else {
     headline = 'Look at what you need';
     if (quick) {
       // Objects sit to the left and right of the screen; up opens the menu.
       // Nothing to pick from on the screen: the patient looks at the real
-      // object. The side only glows to show the device has noticed.
+      // object, and the plate on that side fills to show it has noticed.
       mode('slots');
       yesText = ''; noText = '';
-      headline = "I'm watching for what you need";
+      headline = 'Watching for what you need';
       sub = 'Look at what you want and keep looking.' + (ses.more ? ' Look up for anything else.' : '');
       $('moreTop').style.visibility = ses.more ? 'visible' : 'hidden';
       $('moreTop').querySelector('.fill').style.width = (ses.more_progress * 100) + '%';
@@ -169,18 +188,17 @@ function render(s) {
       $('bar').firstElementChild.style.width = (ses.progress * 100) + '%';
     }
   }
-  $('headline').textContent = headline;
+  setHeadline(headline);
   $('sub').textContent = sub;
   $('count').textContent = count;
-  $('no').querySelector('span').textContent = noText;
-  $('yes').querySelector('span').textContent = yesText;
+  $('no').querySelector('.label').textContent = noText;
+  $('yes').querySelector('.label').textContent = yesText;
 
   if (ses.state !== lastState) {
     if (ses.state === 'prompt' || ses.state === 'menu') chime(660);
     if (ses.state === 'sent') chime(880);
     lastState = ses.state;
   }
-  // A short, lower sound each time the menu moves to the next item.
   const item = ses.menu ? ses.menu.index : null;
   if (item !== lastItem) { if (item) chime(520); lastItem = item; }
 
@@ -188,16 +206,16 @@ function render(s) {
   const bits = [st.face_ok ? 'Tracking' : 'Cannot see your face'];
   if (st.temp_c != null) bits.push(st.temp_c.toFixed(1) + ' °C');
   if (!st.nurse_screens) bits.push('Nurse station not connected');
-  $('status').textContent = bits.join('  ·  ');
+  $('status').textContent = bits.join('    ');
 
   const calls = $('calls');
   calls.replaceChildren();
-  s.alerts.filter(a => a.state !== 'acked' || s.time - a.acked_at < 60).slice(0, 3).forEach(a => {
+  s.alerts.filter(a => a.state !== 'acked' || s.time - a.acked_at < 60).slice(0, 2).forEach(a => {
     const d = document.createElement('div');
     d.className = a.state;
     const what = a.message.replace(/^[^:]*: patient /, '');
-    d.textContent = a.state === 'acked' ? 'Your nurse is on the way (' + what + ')'
-      : a.state === 'escalated' ? 'Still calling your nurse: ' + what
+    d.textContent = a.state === 'acked' ? 'Nurse on the way: ' + what
+      : a.state === 'escalated' ? 'Still calling: ' + what
       : 'Calling your nurse: ' + what;
     calls.appendChild(d);
   });
@@ -207,10 +225,10 @@ let lastMessage = 0;
 function offline(text) {
   mode('');
   $('count').textContent = '';
-  $('headline').textContent = text;
+  setHeadline(text);
   $('sub').textContent = 'Requests cannot be made right now.';
   $('dot').className = '';
-  $('status').textContent = '';
+  $('status').textContent = 'Offline';
 }
 const es = new EventSource('/events?role=patient');
 es.onmessage = e => { lastMessage = Date.now(); render(JSON.parse(e.data)); };

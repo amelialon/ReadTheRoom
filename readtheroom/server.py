@@ -80,6 +80,9 @@ def make_handler(hub: Hub, app):
             if url.path in PAGES:
                 with open(os.path.join(STATIC, PAGES[url.path]), "rb") as f:
                     self._send(200, f.read(), "text/html; charset=utf-8")
+            elif url.path == "/theme.css":
+                with open(os.path.join(STATIC, "theme.css"), "rb") as f:
+                    self._send(200, f.read(), "text/css; charset=utf-8")
             elif url.path == "/scene.jpg":
                 jpeg = app.scene_photo()
                 if jpeg is None:

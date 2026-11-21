@@ -95,6 +95,10 @@ How it behaves:
 
 The words in `zones.json` must be in the exported model's word list; the app says so at start-up if they are not. YOLO-World cannot be exported to TFLite, so on the Pi it has to run on QNX's `onnxruntime` package.
 
+## The screens
+
+All three pages share one look (`readtheroom/static/theme.css`): a silver-grey ground, white plates sitting in soft trays, one burnt-orange attention colour, red only for urgent and offline. They use the Plus Jakarta Sans font when the browser can fetch it and the system font otherwise, so nothing breaks offline. The patient screen keeps its answer plates at the left and right edges and puts nothing at the top edge, because looking up is how the menu opens.
+
 ## Room view (for presenting)
 
 `http://DEVICE:8000/room` shows the room as the scene camera sees it, with a labelled box around each object. The box of the object the patient is looking at lights up and fills as they hold their gaze, turns amber while its question is open, and the question and the request sent appear underneath. Without a scene camera it shows the objects as tiles that light up the same way. During calibration it follows along: the object being learned pulses blue, the instruction is shown underneath, and a row of bars shows how far through it is. It shows the objects, never the patient's face.
