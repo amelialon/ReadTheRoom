@@ -40,6 +40,15 @@ class Config:
     cold_below_c: float = 19.0
     climate_reask_s: float = 900.0
 
+    # Quick mode: directions from one look at the centre (see directions.py)
+    gaze_mode: str = "quick"       # or "trained": the guided routine, objects anywhere
+    dir_h_threshold: float = 0.16
+    dir_v_threshold: float = 0.10
+    dir_adapt: float = 0.005
+    greet_settle_s: float = 0.8
+    greet_record_s: float = 1.7
+    greet_retry_s: float = 5.0
+
     # Calibration
     settle_s: float = 1.2
     record_s: float = 1.5

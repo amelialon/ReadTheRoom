@@ -413,6 +413,6 @@ def test_app_uses_the_answer_mode(tmp_path):
     assert state["status"]["answer_mode"] == "vertical"
     assert state["session"]["more"] is True
 
-    flat = App(Config(), zones, str(tmp_path), Hub(), simulate=True)
+    flat = App(Config(gaze_mode="trained"), zones, str(tmp_path), Hub(), simulate=True)
     assert flat._calibration_path.endswith("calibration.json")
     assert "Look at YES on the left" in [text for _, text in flat.calibrator.targets]

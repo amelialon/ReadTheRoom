@@ -4,8 +4,11 @@ from __future__ import annotations
 calibration: only one look at the centre is needed, to learn where "centre"
 is for this person and camera position. After GaVe (Zeng et al., 2023).
 
-EXPERIMENTAL: the thresholds below are first guesses and are not used by the
-app yet. Run `python -m readtheroom.check_directions` to measure them.
+The thresholds come from one person on one laptop camera (see
+`python -m readtheroom.check_directions`), so re-measure them on the demo
+hardware. Two things that measurement showed:
+- Looking down cannot be told from half-closed eyes, so "down" is not used.
+- Looking sideways also lifts the up/down signal, so sideways is decided first.
 """
 
 # Positions in the feature vector from features.py
@@ -32,20 +35,19 @@ def signals(feature) -> dict:
 
 
 class DirectionReader:
-    """Turns signals into one of five directions, relative to a learned centre."""
+    """Turns signals into left / right / up / centre, relative to a learned centre."""
 
-    def __init__(self, h_threshold: float = 0.18, v_threshold: float = 0.15,
-                 head_h_weight: float = 0.0, head_v_weight: float = 0.0):
+    def __init__(self, h_threshold: float = 0.16, v_threshold: float = 0.10,
+                 adapt: float = 0.005):
         self.h_threshold = h_threshold
         self.v_threshold = v_threshold
-        self.head_h_weight = head_h_weight
-        self.head_v_weight = head_v_weight
+        self.adapt_rate = adapt
         self.centre = None  # (h, v) when looking at the middle of the screen
 
-    def _hv(self, feature):
+    @staticmethod
+    def _hv(feature):
         s = signals(feature)
-        return (s["eye_h"] + self.head_h_weight * s["head_yaw"],
-                s["eye_v"] + self.head_v_weight * s["head_pitch"])
+        return s["eye_h"], s["eye_v"]
 
     def set_centre(self, features) -> None:
         """Learn "centre" from a second or two of frames looking at the screen."""
@@ -60,11 +62,18 @@ class DirectionReader:
             return None
         h, v = self._hv(feature)
         dh, dv = h - self.centre[0], v - self.centre[1]
-        # Compare each axis in units of its own threshold, so the stronger
-        # movement wins when the eyes go diagonally.
-        nh, nv = dh / self.h_threshold, dv / self.v_threshold
-        if abs(nh) < 1 and abs(nv) < 1:
-            return CENTRE
-        if abs(nh) >= abs(nv):
-            return LEFT if nh > 0 else RIGHT
-        return UP if nv > 0 else DOWN
+        if abs(dh) >= self.h_threshold:
+            return LEFT if dh > 0 else RIGHT
+        if dv >= self.v_threshold:
+            return UP
+        return CENTRE
+
+    def adapt(self, feature) -> None:
+        """Follow slow drift: nudge the centre toward a frame already read as
+        centre. Call only for such frames."""
+        if self.centre is None or feature is None:
+            return
+        h, v = self._hv(feature)
+        a = self.adapt_rate
+        self.centre = (self.centre[0] + a * (h - self.centre[0]),
+                       self.centre[1] + a * (v - self.centre[1]))

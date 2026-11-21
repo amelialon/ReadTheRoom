@@ -19,7 +19,7 @@ import subprocess
 import sys
 import time
 
-from .directions import CENTRE, DOWN, LEFT, RIGHT, UP, DirectionReader, signals
+from .directions import CENTRE, LEFT, RIGHT, UP, DirectionReader, signals
 from .features import FaceFeatureExtractor
 
 STEPS = [
@@ -28,7 +28,7 @@ STEPS = [
     ("centre again", CENTRE, "Look at the centre of the screen"),
     ("far right", RIGHT, "Look far to your right, past the edge of the screen"),
     ("up", UP, "Look up, above the screen"),
-    ("down", DOWN, "Look down, below the screen"),
+    ("down", CENTRE, "Look down, below the screen"),  # down is ignored on purpose
     ("left edge", LEFT, "Look at the left edge of the screen"),
     ("right edge", RIGHT, "Look at the right edge of the screen"),
     ("centre last", CENTRE, "Look at the centre of the screen"),
@@ -94,7 +94,7 @@ def main() -> None:
             values = [s[key] for s in sig]
             cols[key] = (statistics.fmean(values), statistics.pstdev(values)) if values else (float("nan"), 0.0)
         reads = [reader.read(f) for f in features]
-        counts = {d: reads.count(d) for d in (CENTRE, LEFT, RIGHT, UP, DOWN) if reads.count(d)}
+        counts = {d: reads.count(d) for d in (CENTRE, LEFT, RIGHT, UP) if reads.count(d)}
         correct = reads.count(expected)
         if name != "centre":  # the first centre is what it learned from
             correct_total += correct

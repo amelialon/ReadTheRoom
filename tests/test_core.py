@@ -586,8 +586,111 @@ def test_direction_reader_needs_only_a_centre_look():
     assert reader.read(_look(out_l=0.5, up=0.05)) == "left"
     assert reader.read(_look(in_l=0.4, up=0.05)) == "right"
     assert reader.read(_look(out_l=0.1, up=0.5)) == "up"
-    assert reader.read(_look(out_l=0.1, down=0.4)) == "down"
-    assert reader.read(_look(out_l=0.6, up=0.3)) == "left"   # diagonal: stronger axis wins
+    assert reader.read(_look(out_l=0.1, down=0.4)) == "centre"   # down is not used
+    assert reader.read(_look(out_l=0.6, up=0.5)) == "left"       # sideways is decided first
     assert reader.read(None) is None
     with pytest.raises(ValueError):
         reader.set_centre([])
+
+
+def test_direction_reader_follows_slow_drift_only():
+    from readtheroom.directions import DirectionReader
+    reader = DirectionReader(adapt=0.05)
+    reader.set_centre([_look()] * 5)
+    for _ in range(200):                          # posture shifts a little
+        reader.adapt(_look(out_l=0.1))
+    assert reader.centre[0] == pytest.approx(0.1, abs=0.01)
+    assert reader.read(_look(out_l=0.1)) == "centre"
+    assert reader.read(_look(out_l=0.4)) == "left"
+
+
+def test_zone_slots_are_validated(tmp_path):
+    import json
+    zone = {"label": "l", "question": "q", "message": "m"}
+    path = tmp_path / "z.json"
+    path.write_text(json.dumps({"zones": [dict(zone, id="a", slot="left"), dict(zone, id="b", slot="right")]}))
+    assert {z.slot for z in load_zones(str(path)).values()} == {"left", "right"}
+    path.write_text(json.dumps({"zones": [dict(zone, id="a", slot="left"), dict(zone, id="b", slot="left")]}))
+    with pytest.raises(ValueError):
+        load_zones(str(path))
+    path.write_text(json.dumps({"zones": [dict(zone, id="a", slot="up")]}))
+    with pytest.raises(ValueError):
+        load_zones(str(path))
+
+
+class _FakeExtractor:
+    """Hands the app whatever feature the test sets, as if from the camera."""
+    last_box = None
+    last_eyes = None
+
+    def __init__(self):
+        self.feature = None
+
+    def __call__(self, frame, ts):
+        return self.feature is not None, self.feature
+
+
+class _FakeCamera:
+    def read(self):
+        return np.zeros((4, 4, 3), np.uint8)
+
+
+@pytest.fixture
+def quick_app(tmp_path):
+    import os
+    from readtheroom.main import App
+    from readtheroom.prompts import load_menu
+    from readtheroom.server import Hub
+    root = os.path.dirname(os.path.dirname(__file__))
+    path = os.path.join(root, "config", "zones.json")
+    extractor = _FakeExtractor()
+    cfg = Config(ema_alpha=1.0)   # no smoothing, so each frame is what the test set
+    app = App(cfg, load_zones(path), str(tmp_path), Hub(), _FakeCamera(), extractor,
+              menu=load_menu(path))
+    clock = Clock()
+
+    def run(feature, seconds):
+        extractor.feature = feature
+        for _ in range(round(seconds / DT)):
+            clock.t += DT
+            app.tick(clock.t)
+    return app, run
+
+
+def test_quick_mode_end_to_end(quick_app):
+    app, run = quick_app
+    centre, left, right, up = _look(), _look(out_l=0.5), _look(in_l=0.5), _look(up=0.4)
+    assert app.quick
+    run(None, 1.0)                       # nobody there yet: nothing starts
+    assert not app.calibrator.active and app.reader.centre is None
+    run(centre, 3.0)                     # the greeting learns the centre by itself
+    assert app.reader.centre is not None and not app.calibrator.active
+    run(left, 2.0)                       # the object on the left
+    assert app.session.state == PROMPT and "thirsty" in app.session.prompt["question"]
+    run(left, 4.0)                       # still looking at it: must not count as YES
+    assert app.session.state == PROMPT and app.alerts.list() == []
+    run(centre, 1.2)                     # back to the screen to read the question
+    run(left, 1.6)                       # now left means YES
+    assert app.session.state == SENT
+    assert app.alerts.list()[0]["message"] == "Bed 4: patient is thirsty and wants water"
+
+
+def test_quick_mode_no_and_menu(quick_app):
+    app, run = quick_app
+    centre, left, right, up = _look(), _look(out_l=0.5), _look(in_l=0.5), _look(up=0.4)
+    run(centre, 3.0)
+    run(right, 2.0)                      # the object on the right
+    assert "snack" in app.session.prompt["question"]
+    run(centre, 1.2)
+    run(right, 1.6)                      # right now means NO
+    assert app.session.state == IDLE and app.alerts.list() == []
+    run(right, 4.0)                      # still looking right after answering: nothing
+    assert app.session.state == IDLE
+    run(centre, 1.0)
+    run(up, 3.6)                         # hold up: the menu opens
+    assert app.session.state == "menu" and app.session.menu[app.session.menu_index].label == "Pain"
+    run(up, 3.0)                         # up means nothing inside the menu
+    assert app.session.state == "menu" and app.alerts.list() == []
+    run(centre, 1.2)
+    run(left, 1.6)                       # YES: pain
+    assert app.alerts.list()[0]["urgent"] is True and "PAIN" in app.alerts.list()[0]["message"]

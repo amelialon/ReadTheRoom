@@ -15,6 +15,7 @@ class Zone:
     urgent: bool = False
     climate: bool = False  # question adapts to room temperature
     detect: str | None = None  # object the scene camera should find at this spot
+    slot: str | None = None    # quick mode: "left" or "right" of the screen
 
 
 def load_zones(path: str) -> dict:
@@ -27,6 +28,10 @@ def load_zones(path: str) -> dict:
             raise ValueError(f"zone id {zone.id!r} is reserved")
         if zone.id in zones:
             raise ValueError(f"duplicate zone id {zone.id!r}")
+        if zone.slot not in (None, "left", "right"):
+            raise ValueError(f"zone {zone.id!r}: slot must be \"left\" or \"right\"")
+        if zone.slot and any(z.slot == zone.slot for z in zones.values()):
+            raise ValueError(f"two zones use the {zone.slot} slot")
         zones[zone.id] = zone
     if not zones:
         raise ValueError("zones file has no zones")

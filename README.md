@@ -28,6 +28,12 @@ python3 -m readtheroom --simulate --answer-mode vertical
 
 YES moves to the top of the screen and NO (and MORE) to the bottom. Calibration asks for "YES at the top" and "NO at the bottom", and is saved separately from a left/right calibration.
 
+## Two ways of reading gaze
+
+**Quick mode (the default).** No guided calibration. When the patient first looks at the screen, a two-second greeting learns where "centre" is; after that the device reads only left, right, up and centre, and keeps the centre up to date by itself. Place one object to the left of the screen and one to the right (the `slot` field in `config/zones.json`). With nothing being asked, looking left or right means that object and holding a look upward opens the MORE menu. Once a question is showing, left is YES and right is NO, but only after the eyes have come back to the centre. This follows the one-point approach of GaVe (Zeng et al., 2023). Its thresholds were measured on one person and one laptop camera; re-measure with `python -m readtheroom.check_directions` on the demo hardware.
+
+**Trained mode (`--gaze-mode trained`).** The guided routine: about 40 seconds, each target shown twice. Objects can be anywhere and there can be more of them. Up/down answers (`--answer-mode vertical`) use this mode.
+
 ## Run with a webcam (laptop)
 
 One-time setup:

@@ -9,7 +9,8 @@ import traceback
 
 from .alerts import AlertStore
 from .calibration import Calibrator, control_targets
-from .config import ANSWER_MODES, REST, Config
+from .config import ANSWER_MODES, Config, NO, REST, YES
+from .directions import CENTRE, LEFT, RIGHT, UP, DirectionReader
 from .features import Ema
 from .prompts import load_menu, load_needs, load_zones
 from .server import Hub, serve
@@ -43,6 +44,18 @@ class App:
         targets += [(z.id, f"Look at the {z.label}") for z in zones.values()]
         self._expected = {t[0] for t in targets}
         self.calibrator = Calibrator(targets, cfg.settle_s, cfg.record_s)
+        # Quick mode needs no guided routine: one look at the centre of the
+        # screen, then left / right / up are read as directions.
+        # Up/down answers need the guided routine, so quick mode is left/right only.
+        self.quick = cfg.gaze_mode == "quick" and cfg.answer_mode == "horizontal"
+        if self.quick:
+            self.reader = DirectionReader(cfg.dir_h_threshold, cfg.dir_v_threshold, cfg.dir_adapt)
+            self._slots = {z.slot: z.id for z in zones.values() if z.slot}
+            self.calibrator = Calibrator([(REST, "Hello. Look here for a moment.")],
+                                         cfg.greet_settle_s, cfg.greet_record_s, passes=1)
+            self._greet_after = 0.0
+            self._q_state = None
+            self._q_centred = False
         self._want_calibration = False
         self._debug_gaze: str | None = REST
         self._temp: float | None = None
@@ -57,7 +70,7 @@ class App:
         self._load_calibration()
 
     def _load_calibration(self) -> None:
-        if self.simulate or not os.path.exists(self._calibration_path):
+        if self.simulate or self.quick or not os.path.exists(self._calibration_path):
             return
         try:
             self.classifier.load(self._calibration_path)
@@ -160,10 +173,52 @@ class App:
             if self.calibrator.update(now, feature):
                 self._finish_calibration(now)
             return None, face
+        if self.quick:
+            return self._perceive_quick(now, feature), face
         return self.classifier.predict(feature), face
+
+    def _perceive_quick(self, now: float, feature):
+        """Direction -> the label the session understands. What a direction
+        means depends on the moment: with nothing asked, left and right are
+        the objects placed there and up opens the menu; once a question or
+        menu item is showing, left is YES and right is NO."""
+        if self.reader.centre is None:
+            if feature is not None and now >= self._greet_after:
+                self.calibrator.start(now)  # the greeting: learn "centre"
+            return None
+        direction = self.reader.read(feature)
+        state = self.session.state
+        if state != self._q_state:
+            # The screen just changed. Eyes must come back to the centre
+            # before a direction counts, so the look that raised a question
+            # can never also answer it.
+            self._q_state, self._q_centred = state, False
+        if direction is None:
+            return None
+        if direction == CENTRE:
+            self._q_centred = True
+            if state == "idle":
+                self.reader.adapt(feature)
+            return REST
+        if not self._q_centred:
+            return None
+        if state == "idle":
+            # Session opens the menu on a long hold of NO while idle; in quick
+            # mode that hold is "up", since right is an object.
+            return NO if direction == UP else self._slots.get(direction)
+        if state in ("prompt", "menu"):
+            return {LEFT: YES, RIGHT: NO}.get(direction)
+        return None
 
     def _finish_calibration(self, now: float) -> None:
         self.session.reset(now)
+        if self.quick:
+            if self.calibrator.error:
+                self._greet_after = now + self.cfg.greet_retry_s  # try again shortly
+            else:
+                self.reader.set_centre(self.calibrator.X)
+                self._q_state = None
+            return
         if self.calibrator.error:
             return  # any earlier calibration stays in use
         try:
@@ -190,7 +245,8 @@ class App:
             self.session.set_overrides(self.scene.overrides())
         label, face = self._perceive(now)
         self._last = (label, face)
-        ready = self.simulate or self.classifier.fitted
+        ready = self.simulate or (self.reader.centre is not None if self.quick
+                                  else self.classifier.fitted)
         if self.calibrator.active or not ready:
             self.session.mark_face(now, face)
         else:
@@ -218,6 +274,8 @@ class App:
                 "nurse_screens": self.hub.count("nurse"),
                 "simulate": self.simulate,
                 "answer_mode": self.cfg.answer_mode,
+                "gaze_mode": "simulate" if self.simulate else ("quick" if self.quick else "trained"),
+                "slots": self._slots if self.quick and not self.simulate else None,
                 "preview": self._preview_on(),
                 "face_width": self._face_width(),
                 "face_box": self._face_box(),
@@ -285,6 +343,9 @@ def main() -> None:
     p.add_argument("--camera", type=int, default=0, help="OpenCV camera index")
     p.add_argument("--frame-file", help="read frames from a JPEG written by a capture process")
     p.add_argument("--model", default=os.path.join(root, "models", "face_landmarker.task"))
+    p.add_argument("--gaze-mode", choices=("quick", "trained"), default="quick",
+                   help="quick: one look at the centre, objects left and right of the screen; "
+                        "trained: the guided routine, objects anywhere")
     p.add_argument("--zones", default=os.path.join(root, "config", "zones.json"))
     p.add_argument("--scene-model", default=os.path.join(root, "models", "scene.onnx"),
                    help="object detector for scene photos; skipped if the file is missing")
@@ -297,7 +358,11 @@ def main() -> None:
     p.add_argument("--port", type=int, default=8000)
     args = p.parse_args()
 
-    cfg = Config(bed=args.bed, answer_mode=args.answer_mode)
+    gaze_mode = args.gaze_mode
+    if gaze_mode == "quick" and args.answer_mode == "vertical":
+        print("Up/down answers need the guided routine; using --gaze-mode trained.")
+        gaze_mode = "trained"
+    cfg = Config(bed=args.bed, answer_mode=args.answer_mode, gaze_mode=gaze_mode)
     zones = load_zones(args.zones)
     source = extractor = sensor = None
     if not args.simulate:

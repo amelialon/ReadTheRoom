@@ -135,11 +135,13 @@ function render(s) {
   $('empty').style.display = s.alerts.length ? 'none' : 'block';
 
   const cal = s.calibration;
+  $('calibrate').textContent = st.gaze_mode === 'quick' ? 'Re-centre (2 seconds)' : 'Start calibration';
   const results = Object.entries(s.self_check).map(([k, v]) => k + ' ' + Math.round(v * 100) + '%');
   const weak = Object.entries(s.self_check).filter(([k, v]) => v < 0.7).map(([k]) => k);
   $('check').textContent = cal.active ? 'Calibrating: step ' + cal.step + ' of ' + cal.steps
     : cal.error ? cal.error
     : st.simulate ? 'Simulation mode: calibration is not needed.'
+    : st.gaze_mode === 'quick' ? (s.calibrated ? 'Ready. The device learned the centre from one look at the screen and keeps it up to date.' : (cal.error || 'Waiting for the patient to look at the screen.'))
     : !s.calibrated ? 'Not calibrated.'
     : results.length ? 'Repeat check (second look recognised from the first): ' + results.join(', ')
         + (weak.length ? '. NOT RELIABLE: ' + weak.join(', ')

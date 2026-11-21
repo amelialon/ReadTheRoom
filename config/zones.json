@@ -5,14 +5,16 @@
       "label": "water bottle",
       "question": "Are you thirsty? Do you need water?",
       "message": "is thirsty and wants water",
-      "detect": "water bottle"
+      "detect": "water bottle",
+      "slot": "left"
     },
     {
       "id": "snack",
       "label": "snack packet",
       "question": "Are you hungry? Do you want a snack?",
       "message": "is hungry and wants a snack",
-      "detect": "snack packet"
+      "detect": "snack packet",
+      "slot": "right"
     },
     {
       "id": "blanket",
