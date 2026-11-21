@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
 import threading
 import time
 import traceback
@@ -164,6 +165,16 @@ class App:
             time.sleep(max(0.0, period - (time.monotonic() - now)))
 
 
+def _lan_address() -> str | None:
+    """This machine's address on the local network (sends no packets)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("10.255.255.255", 1))
+            return probe.getsockname()[0]
+    except OSError:
+        return None
+
+
 def main() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     p = argparse.ArgumentParser(prog="readtheroom")
@@ -196,8 +207,12 @@ def main() -> None:
     hub = Hub()
     app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate)
     serve(hub, app, args.host, args.port)
-    print(f"Patient screen: http://<this-device>:{args.port}/")
-    print(f"Nurse station:  http://<this-device>:{args.port}/nurse")
+    print(f"Patient screen: http://localhost:{args.port}/")
+    print(f"Nurse station:  http://localhost:{args.port}/nurse")
+    address = _lan_address()
+    if address and args.host == "0.0.0.0":
+        print(f"From other devices on this network: http://{address}:{args.port}/ "
+              f"and http://{address}:{args.port}/nurse")
     if sensor is None and not args.simulate:
         print("No temperature sensor found; room-climate prompts are off.")
     try:
