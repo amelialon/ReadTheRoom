@@ -45,6 +45,13 @@ class Config:
     dir_h_threshold: float = 0.16
     dir_v_threshold: float = 0.14
     dir_adapt: float = 0.005
+    # How much the iris position and the head angle add to the eye scores on
+    # each axis, sign included. 0 = eye scores only. Values come from
+    # `python -m readtheroom.tune_directions data/directions-*.json`.
+    dir_iris_weight: float = 0.0
+    dir_head_weight: float = 0.0
+    dir_iris_v_weight: float = 0.0
+    dir_head_v_weight: float = 0.0
     greet_settle_s: float = 0.8
     greet_record_s: float = 1.7
     greet_retry_s: float = 5.0

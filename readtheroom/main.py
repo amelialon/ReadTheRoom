@@ -49,7 +49,10 @@ class App:
         # Up/down answers need the guided routine, so quick mode is left/right only.
         self.quick = cfg.gaze_mode == "quick" and cfg.answer_mode == "horizontal"
         if self.quick:
-            self.reader = DirectionReader(cfg.dir_h_threshold, cfg.dir_v_threshold, cfg.dir_adapt)
+            self.reader = DirectionReader(cfg.dir_h_threshold, cfg.dir_v_threshold, cfg.dir_adapt,
+                                          iris_weight=cfg.dir_iris_weight, head_weight=cfg.dir_head_weight,
+                                          iris_v_weight=cfg.dir_iris_v_weight,
+                                          head_v_weight=cfg.dir_head_v_weight)
             self._slots = {z.slot: z.id for z in zones.values() if z.slot}
             # Direction -> zone ids to ask about, in order. Filled from the
             # scene camera when it sees objects; the typed slots otherwise.
