@@ -10,27 +10,28 @@
   --r-lg: 24px;
   --r-md: 16px;
 
-  /* Palette: cream #FEFAF3, blush #F6E2E9, light sage #B8CFB3, sage #84A282. */
-  --ground: #fefaf3;
-  --ground-deep: #f4ede1;
-  --shell: rgba(70, 60, 45, .055);
-  --edge: rgba(70, 60, 45, .07);
+  /* Paper, graphite and one green. The green is decisive rather than pastel,
+     and it is the only colour apart from red, which is kept for danger. */
+  --ground: #f2f1ec;
+  --ground-deep: #e9e7e0;
+  --shell: rgba(40, 42, 38, .06);
+  --edge: rgba(40, 42, 38, .08);
   --plate: #ffffff;
-  --plate-soft: #faf6ee;
-  --ink: #262a27;
-  --ink-2: #67706a;
-  --ink-3: #9ea69f;
-  --accent: #84a282;           /* marks, large labels, rings */
-  --accent-deep: #5e7a5e;      /* the same green where it has to be read as text */
-  --accent-light: #b8cfb3;     /* fills and tints */
+  --plate-soft: #f5f4f0;
+  --ink: #1e211f;
+  --ink-2: #5f645f;
+  --ink-3: #9a9e98;
+  --accent: #2f6b55;           /* marks, rings, text: reads as a real colour */
+  --accent-deep: #24533f;
+  --accent-light: #8fc3a7;     /* fills */
   --accent-ink: #ffffff;
-  --accent-tint: rgba(184, 207, 179, .45);
-  --accent-wash: #e9f0e6;
-  --blush: #f6e2e9;            /* something on its way to the nurse */
-  --danger: #b8463c;
-  --danger-wash: #f7e1e0;
-  --shadow: 0 1px 2px rgba(70, 60, 45, .04), 0 24px 60px -24px rgba(70, 60, 45, .2);
-  --shadow-lift: 0 2px 4px rgba(70, 60, 45, .04), 0 40px 90px -30px rgba(70, 60, 45, .28);
+  --accent-tint: rgba(143, 195, 167, .38);
+  --accent-wash: #e4f0ea;
+  --blush: #e4f0ea;            /* something on its way to the nurse (same green, pale) */
+  --danger: #b4332a;
+  --danger-wash: #f6e3e0;
+  --shadow: 0 1px 2px rgba(40, 42, 38, .04), 0 24px 60px -24px rgba(40, 42, 38, .2);
+  --shadow-lift: 0 2px 4px rgba(40, 42, 38, .04), 0 40px 90px -30px rgba(40, 42, 38, .28);
   --highlight: inset 0 1px 0 rgba(255, 255, 255, .95);
 }
 
@@ -53,15 +54,20 @@ body {
   display: inline-flex; align-items: center; gap: 10px;
   padding: 11px 14px 11px 20px; border-radius: 999px; border: 0;
   background: var(--ink); color: var(--plate); font: inherit; font-weight: 600; font-size: 15px;
-  cursor: pointer; transition: transform 500ms var(--ease), background 500ms var(--ease);
+  cursor: pointer; transition: transform 140ms var(--ease), background 260ms var(--ease);
 }
-.pill:active { transform: scale(.98); }
+.pill:active { transform: scale(.97); }
 .pill .go {
   width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
   background: rgba(255, 255, 255, .14); font-size: 15px; line-height: 1;
-  transition: transform 500ms var(--ease);
+  transition: transform 220ms var(--ease);
 }
-.pill:hover .go { transform: translate(2px, -1px) scale(1.05); }
+@media (hover: hover) and (pointer: fine) {
+  .pill:hover .go { transform: translate(2px, -1px) scale(1.05); }
+}
+/* A press that turns into a state: the label blurs out while the row catches up. */
+.pill .label { display: inline-block; transition: filter 200ms var(--ease), opacity 200ms var(--ease); }
+.pill.sent .label { filter: blur(2px); opacity: .6; }
 .pill.soft { background: var(--plate-soft); color: var(--ink); box-shadow: 0 0 0 1px var(--edge); }
 .pill.soft .go { background: rgba(16, 24, 32, .06); }
 .pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -79,12 +85,12 @@ body {
 .tag.bad .dot { background: var(--danger); }
 
 /* Arrive: a heavy, slow fade-up used once, when a page opens. */
-.arrive { animation: arrive 900ms var(--ease) both; }
+.arrive { animation: arrive 600ms var(--ease) both; }
 .arrive:nth-child(2) { animation-delay: 80ms; }
 .arrive:nth-child(3) { animation-delay: 160ms; }
 .arrive:nth-child(4) { animation-delay: 240ms; }
 .arrive:nth-child(5) { animation-delay: 320ms; }
-@keyframes arrive { from { opacity: 0; transform: translateY(28px); filter: blur(6px); } }
+@keyframes arrive { from { opacity: 0; transform: translateY(20px); filter: blur(3px); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0ms !important; animation: none !important; }

@@ -23,9 +23,9 @@
   #stage { position: relative; display: none; border-radius: calc(var(--r-xl) - 6px); overflow: hidden;
            background: var(--shell); box-shadow: 0 0 0 6px var(--shell), 0 0 0 7px var(--edge), var(--shadow-lift); }
   #photo { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(.9); }
-  .spot { position: absolute; border: 2px solid rgba(255,255,255,.85); border-radius: var(--r-md);
-          transition: left 600ms var(--ease), top 600ms var(--ease), width 600ms var(--ease), height 600ms var(--ease),
-                      border-color 400ms var(--ease), box-shadow 400ms var(--ease); overflow: hidden; }
+  .spot { position: absolute; left: 0; top: 0; border: 2px solid rgba(255,255,255,.85); border-radius: var(--r-md);
+          transition: transform 400ms var(--ease), border-color 300ms var(--ease), box-shadow 300ms var(--ease);
+          overflow: hidden; will-change: transform; }
   .spot .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(184,207,179,.45);
                 transition: height 100ms linear; }
   .spot.other { border: 1.5px dashed rgba(255,255,255,.45); }
@@ -34,10 +34,10 @@
   .spot.calib { border-color: var(--accent); animation: breathe 1.6s var(--ease) infinite; }
   .spot.calib .fill { background: rgba(184,207,179,.35); }
   @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 3px rgba(132,162,130,.4); } 50% { box-shadow: 0 0 0 9px rgba(132,162,130,.12); } }
-  .tag { position: absolute; transform: translateY(-100%); margin-top: -8px; padding: 6px 12px; border-radius: 999px;
+  .tag { position: absolute; left: 0; top: 0; margin-top: -8px; padding: 6px 12px; border-radius: 999px;
          background: rgba(255,255,255,.92); color: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 0;
          text-transform: none; box-shadow: var(--shadow); white-space: nowrap;
-         transition: left 600ms var(--ease), top 600ms var(--ease), background 400ms var(--ease), color 400ms var(--ease); }
+         transition: transform 400ms var(--ease), background 300ms var(--ease), color 300ms var(--ease); }
   .tag.other { font-weight: 500; color: var(--ink-2); background: rgba(255,255,255,.7); }
   .tag.looking, .tag.asked, .tag.calib { background: var(--accent-deep); color: var(--accent-ink); }
 
@@ -103,9 +103,11 @@ function place(key, box, size, label, cls, progress) {
   }
   const [w, h] = size, [x1, y1, x2, y2] = box;
   e.box.className = 'spot ' + cls; e.tag.className = 'tag ' + cls;
-  e.box.style.left = (x1 / w * 100) + '%'; e.box.style.top = (y1 / h * 100) + '%';
+  // Position with transform so moves run on the compositor; only size touches layout.
+  const sw = $('stage').clientWidth, sh = $('stage').clientHeight;
+  e.box.style.transform = 'translate(' + (x1 / w * sw) + 'px,' + (y1 / h * sh) + 'px)';
   e.box.style.width = ((x2 - x1) / w * 100) + '%'; e.box.style.height = ((y2 - y1) / h * 100) + '%';
-  e.tag.style.left = (x1 / w * 100) + '%'; e.tag.style.top = Math.max(y1 / h * 100, 7) + '%';
+  e.tag.style.transform = 'translate(' + (x1 / w * sw) + 'px,' + (Math.max(y1 / h, .07) * sh) + 'px) translateY(-100%)';
   e.tag.textContent = label;
   e.fill.style.height = (progress * 100) + '%';
 }

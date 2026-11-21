@@ -32,8 +32,8 @@
   #count { display: inline-flex; }
   #headline { font-size: clamp(30px, 3.4vw, 54px); font-weight: 700; letter-spacing: -.035em; line-height: 1.1;
               max-width: 20ch; margin: 0; }
-  #headline.enter { animation: enter 450ms var(--ease); }
-  @keyframes enter { from { opacity: 0; transform: translateY(14px); filter: blur(5px); } }
+  #headline.enter { animation: enter 320ms var(--ease); }
+  @keyframes enter { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } }
   body.menu #headline { font-size: clamp(40px, 5vw, 76px); }
   #sub { font-size: clamp(15px, 1.25vw, 20px); color: var(--ink-2); line-height: 1.45; max-width: 40ch; min-height: 1.4em; }
   #bar { width: 42%; height: 4px; border-radius: 2px; background: var(--ground-deep); overflow: hidden; visibility: hidden; }
@@ -55,7 +55,7 @@
   #island { position: absolute; left: 50%; bottom: 2.4vh; transform: translateX(-50%); display: flex; align-items: center;
             gap: 10px; padding: 8px 10px 8px 18px; border-radius: 999px; background: var(--plate);
             box-shadow: var(--highlight), var(--shadow-lift); font-size: 15px; white-space: nowrap;
-            transition: transform 600ms var(--ease); }
+            transition: background 300ms var(--ease); }
   #top { display: flex; align-items: center; gap: 9px; color: var(--ink-2); }
   #dot { width: 7px; height: 7px; border-radius: 999px; background: var(--danger); }
   #dot.ok { background: var(--accent); }

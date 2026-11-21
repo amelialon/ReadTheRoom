@@ -47,7 +47,10 @@
   /* Requests: soft plates, newest first. */
   #alerts { display: flex; flex-direction: column; gap: 10px; }
   .alert { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: var(--r-lg);
-           background: var(--plate-soft); transition: background 500ms var(--ease), opacity 500ms var(--ease); }
+           background: var(--plate-soft);
+           transition: background 240ms var(--ease), opacity 400ms var(--ease), transform 260ms var(--ease); }
+  /* A new request rises into the list instead of appearing from nothing. */
+  @starting-style { .alert { opacity: 0; transform: translateY(8px); } }
   .alert .body { margin-right: auto; display: flex; flex-direction: column; gap: 4px; }
   .alert .msg { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
   .alert .meta { font-size: 13px; color: var(--ink-2); }
@@ -162,8 +165,12 @@ function render(s) {
       msg.textContent = a.message.replace(/^[^:]*: patient /, (m) => '').replace(/^\w/, c => c.toUpperCase());
       const meta = document.createElement('div'); meta.className = 'meta';
       const btn = document.createElement('button'); btn.className = 'pill';
-      btn.innerHTML = 'On my way <span class="go">&#8594;</span>';
-      btn.onclick = () => post('/api/ack', {id: a.id});
+      btn.innerHTML = '<span class="label">On my way</span> <span class="go">&#8594;</span>';
+      btn.onclick = () => {
+        btn.classList.add('sent');
+        btn.querySelector('.label').textContent = 'On the way';
+        post('/api/ack', {id: a.id});
+      };
       body.append(msg, meta); el.append(body, btn);
       $('alerts').prepend(el);
       cards.set(a.id, el);
