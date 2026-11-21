@@ -109,14 +109,19 @@ class SceneMap:
     photos after it was last seen, so one missed detection changes nothing.
     """
 
-    def __init__(self, needs: dict, hold: int = 5, margin: float = 0.08):
+    def __init__(self, needs: dict, hold: int = 5, margin: float = 0.08,
+                 min_score: float = 0.4, confirm: int = 2, max_area: float = 0.35):
         self.needs = needs
         self.hold = hold
         self.margin = margin
+        self.min_score = min_score      # open-vocabulary detectors guess freely below this
+        self.confirm = confirm          # photos in a row before an object counts
+        self.max_area = max_area        # share of the picture; bigger boxes are not objects
         self.reset()
 
     def reset(self) -> None:
-        self._objects: dict = {}   # (label, side) -> {box, score, age, dx, dy}
+        self._objects: dict = {}   # (label, side) -> {box, score, age, dx, dy, seen}
+        self._candidates: dict = {}  # (label, side) -> sightings in a row
         self._unplaced: dict = {}  # label -> age
         self._screen = None        # box of the patient screen in the photo
         self._screen_age = 0
@@ -145,19 +150,32 @@ class SceneMap:
             entry["age"] += 1
         for label in self._unplaced:
             self._unplaced[label] += 1
+        seen_now = set()
         for d in detections:
-            if d["label"] not in self.needs:
+            if d["label"] not in self.needs or d["score"] < self.min_score:
                 continue
-            ox, oy = (d["box"][0] + d["box"][2]) / 2, (d["box"][1] + d["box"][3]) / 2
+            x1, y1, x2, y2 = d["box"]
+            if (x2 - x1) * (y2 - y1) > self.max_area * w * h:
+                continue
+            ox, oy = (x1 + x2) / 2, (y1 + y2) / 2
             dx = ox - cx
             if abs(dx) < limit:
                 self._unplaced[d["label"]] = 0
                 continue
             key = (d["label"], "left" if dx < 0 else "right")
-            old = self._objects.get(key)
-            if old is None or old["age"] > 0 or d["score"] > old["score"]:
-                self._objects[key] = {"box": d["box"], "score": d["score"], "age": 0,
-                                      "dx": abs(dx), "dy": abs(oy - cy)}
+            seen_now.add(key)
+            entry = {"box": d["box"], "score": d["score"], "age": 0,
+                     "dx": abs(dx), "dy": abs(oy - cy)}
+            if key in self._objects:
+                self._objects[key] = entry
+            else:
+                count = self._candidates.get(key, 0) + 1
+                if count >= self.confirm:
+                    self._objects[key] = entry
+                    self._candidates.pop(key, None)
+                else:
+                    self._candidates[key] = count
+        self._candidates = {k: v for k, v in self._candidates.items() if k in seen_now}
         self._objects = {k: v for k, v in self._objects.items() if v["age"] <= self.hold}
         self._unplaced = {k: v for k, v in self._unplaced.items() if v <= self.hold}
 

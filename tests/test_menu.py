@@ -148,10 +148,19 @@ def test_opening_shows_progress_only_once_gaze_has_been_elsewhere(rig):
 
 # --- choosing --------------------------------------------------------------
 
-def test_choosing_the_first_item_sends_an_urgent_alert(rig):
+def test_choosing_an_urgent_item_asks_once_more_before_sending(rig):
     session, clock, alerts = rig
     open_menu(session, clock)
     step(session, clock, YES)
+    assert session.state == PROMPT and alerts.list() == []
+    assert session.prompt["question"] == "Tell your nurse: pain. Are you sure?"
+    feed(session, clock, REST, session.cfg.refractory_s + 0.1)
+    feed(session, clock, NO, session.cfg.confirm_window_s + 0.3)
+    assert session.state == IDLE and alerts.list() == []    # a NO sends nothing
+    open_menu(session, clock)
+    step(session, clock, YES)
+    feed(session, clock, REST, session.cfg.refractory_s + 0.1)
+    feed(session, clock, YES, session.cfg.confirm_window_s + 0.3)
     assert session.state == SENT
     (alert,) = alerts.list()
     assert alert["message"] == "Bed 4: patient is in PAIN"

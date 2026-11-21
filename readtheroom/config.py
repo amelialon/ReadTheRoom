@@ -24,7 +24,7 @@ class Config:
 
     # Menu of needs that have no object. It opens on a held NO while idle;
     # the hold must be clearly longer than an answer (confirm_window_s).
-    menu_open_s: float = 3.0
+    menu_open_s: float = 3.5
     menu_rearm_s: float = 0.5        # gaze must be off NO this long before a hold counts
     menu_step_timeout_s: float = 8.0  # no answer to a menu item closes the menu
 
@@ -43,7 +43,7 @@ class Config:
     # Quick mode: directions from one look at the centre (see directions.py)
     gaze_mode: str = "quick"       # or "trained": the guided routine, objects anywhere
     dir_h_threshold: float = 0.16
-    dir_v_threshold: float = 0.10
+    dir_v_threshold: float = 0.14
     dir_adapt: float = 0.005
     greet_settle_s: float = 0.8
     greet_record_s: float = 1.7

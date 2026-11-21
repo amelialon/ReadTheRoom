@@ -8,6 +8,7 @@ from .prompts import climate_offer, resolve
 IDLE, PROMPT, SENT, MENU = "idle", "prompt", "sent", "menu"
 _AWAY = "_away"
 CLIMATE_KEY = "_climate"
+MENU_KEY = "_menu:"
 
 
 class Session:
@@ -182,9 +183,16 @@ class Session:
         self.confirm.add(now, label if label in (YES, NO) else None)
         answer = self.confirm.winner(now)
         if answer == YES:
+            item = self.menu[self.menu_index]
+            if item.urgent:
+                # An urgent call reaches the nurse as an alarm, so it is asked
+                # once more as a plain question before it is sent.
+                self._open_prompt(now, MENU_KEY + item.label,
+                                  f"Tell your nurse: {item.label.lower()}. Are you sure?",
+                                  item.message, True)
+                return
             # Choosing is the confirmation: the item was on screen through the
             # refractory period and a full hold.
-            item = self.menu[self.menu_index]
             self.alerts.create(f"{self.cfg.bed}: patient {item.message}", item.urgent)
             self.state, self.state_since = SENT, now
         elif answer == NO:

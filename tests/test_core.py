@@ -687,12 +687,16 @@ def test_quick_mode_no_and_menu(quick_app):
     run(right, 4.0)                      # still looking right after answering: nothing
     assert app.session.state == IDLE
     run(centre, 1.0)
-    run(up, 3.6)                         # hold up: the menu opens
+    run(up, app.cfg.menu_open_s + 0.6)   # hold up: the menu opens
     assert app.session.state == "menu" and app.session.menu[app.session.menu_index].label == "Pain"
     run(up, 3.0)                         # up means nothing inside the menu
     assert app.session.state == "menu" and app.alerts.list() == []
     run(centre, 1.2)
-    run(left, 1.6)                       # YES: pain
+    run(left, 1.6)                       # YES: pain, which is asked once more
+    assert app.session.state == PROMPT and "sure" in app.session.prompt["question"]
+    assert app.alerts.list() == []
+    run(centre, 1.2)
+    run(left, 1.6)                       # YES again: now it is sent
     assert app.alerts.list()[0]["urgent"] is True and "PAIN" in app.alerts.list()[0]["message"]
 
 
@@ -708,9 +712,15 @@ def scene_map():
     return SceneMap(NEEDS)
 
 
+def see(scene_map, detections, times=None):
+    """Show the same photo enough times for new objects to count."""
+    for _ in range(times or scene_map.confirm):
+        scene_map.update(detections, SIZE)
+
+
 def test_scene_map_places_objects_by_where_they_are(scene_map):
-    scene_map.update([SCREEN, det("water bottle", [100, 300, 180, 460]),
-                      det("cup", [1000, 320, 1080, 420]), det("sign", [50, 50, 90, 90])], SIZE)
+    see(scene_map, [SCREEN, det("water bottle", [100, 300, 180, 460]),
+                    det("cup", [1000, 320, 1080, 420]), det("sign", [50, 50, 90, 90])])
     sides = scene_map.sides()
     assert [i["label"] for i in sides["left"]] == ["water bottle"]
     assert [i["label"] for i in sides["right"]] == ["cup"]       # "sign" has no question: ignored
@@ -723,18 +733,29 @@ def test_scene_map_places_objects_by_where_they_are(scene_map):
 
 
 def test_scene_map_orders_objects_that_share_a_side(scene_map):
-    scene_map.update([SCREEN, det("book", [100, 20, 200, 90]),          # high up on the left
-                      det("water bottle", [150, 330, 210, 400])], SIZE)  # level with the screen
+    see(scene_map, [SCREEN, det("book", [100, 20, 200, 90]),          # high up on the left
+                    det("water bottle", [150, 330, 210, 400])])         # level with the screen
     assert [i["label"] for i in scene_map.sides()["left"]] == ["water bottle", "book"]
 
 
 def test_scene_map_survives_missed_detections_then_forgets(scene_map):
-    scene_map.update([SCREEN, det("cup", [1000, 320, 1080, 420])], SIZE)
+    see(scene_map, [SCREEN, det("cup", [1000, 320, 1080, 420])])
     for _ in range(scene_map.hold):
         scene_map.update([], SIZE)                    # missed a few times: still there
     assert [i["label"] for i in scene_map.sides()["right"]] == ["cup"]
     scene_map.update([], SIZE)                        # gone for good
     assert scene_map.sides()["right"] == []
+
+
+def test_scene_map_ignores_one_off_weak_and_huge_detections(scene_map):
+    scene_map.update([SCREEN, det("cup", [100, 300, 180, 400])], SIZE)       # seen once only
+    scene_map.update([SCREEN], SIZE)
+    scene_map.update([SCREEN, det("cup", [100, 300, 180, 400])], SIZE)       # not in a row
+    assert scene_map.sides()["left"] == []
+    see(scene_map, [SCREEN, det("cup", [100, 300, 180, 400], 0.3)])          # a weak guess (a jacket?)
+    assert scene_map.sides()["left"] == []
+    see(scene_map, [SCREEN, det("blanket", [0, 0, 1200, 700], 0.9)])          # most of the picture
+    assert scene_map.sides() == {"left": [], "right": []}
 
 
 def test_scene_map_refuses_objects_in_line_with_the_screen(scene_map):
@@ -745,7 +766,7 @@ def test_scene_map_refuses_objects_in_line_with_the_screen(scene_map):
 
 
 def test_scene_map_without_a_visible_screen_uses_the_middle(scene_map):
-    scene_map.update([det("cup", [100, 300, 180, 400]), det("book", [1100, 300, 1200, 400])], SIZE)
+    see(scene_map, [det("cup", [100, 300, 180, 400]), det("book", [1100, 300, 1200, 400])])
     sides = scene_map.sides()
     assert [i["label"] for i in sides["left"]] == ["cup"] and [i["label"] for i in sides["right"]] == ["book"]
     assert scene_map.screen is None
