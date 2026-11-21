@@ -218,11 +218,14 @@ function render(s) {
 $('calibrate').onclick = () => post('/api/calibrate');
 let previewOn = false;
 $('previewBtn').onclick = () => post('/api/preview', {on: !previewOn});
-// Ask for the next picture only once the last one has arrived, so a slow link never queues up.
+// The camera view is a live stream while it is on; the stream ends by itself when it is switched off.
 const pv = $('preview');
-function nextPreview() { if (previewOn) pv.src = '/preview.jpg?t=' + Date.now(); else setTimeout(nextPreview, 300); }
-pv.onload = () => setTimeout(nextPreview, 60); pv.onerror = () => setTimeout(nextPreview, 500);
-nextPreview();
+let streaming = false;
+setInterval(() => {
+  if (previewOn && !streaming) { pv.src = '/preview.mjpg?t=' + Date.now(); streaming = true; }
+  if (!previewOn && streaming) { pv.removeAttribute('src'); streaming = false; }
+}, 300);
+pv.onerror = () => { streaming = false; };
 $('relearn').onclick = () => post('/api/scene/reset');
 $('setT').onclick = () => post('/api/debug/temp', {temp_c: parseFloat($('t').value)});
 $('clearT').onclick = () => post('/api/debug/temp', {temp_c: null});

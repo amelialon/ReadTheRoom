@@ -715,7 +715,7 @@ def test_scene_map_places_objects_by_where_they_are(scene_map):
     assert [i["label"] for i in sides["left"]] == ["water bottle"]
     assert [i["label"] for i in sides["right"]] == ["cup"]       # "sign" has no question: ignored
     # Move the bottle to the other side: the map follows, nothing is typed in.
-    for _ in range(4):
+    for _ in range(scene_map.hold + 1):
         scene_map.update([SCREEN, det("water bottle", [900, 300, 980, 460]),
                           det("cup", [1000, 320, 1080, 420])], SIZE)
     sides = scene_map.sides()
@@ -730,8 +730,8 @@ def test_scene_map_orders_objects_that_share_a_side(scene_map):
 
 def test_scene_map_survives_missed_detections_then_forgets(scene_map):
     scene_map.update([SCREEN, det("cup", [1000, 320, 1080, 420])], SIZE)
-    for _ in range(3):
-        scene_map.update([], SIZE)                    # missed three times: still there
+    for _ in range(scene_map.hold):
+        scene_map.update([], SIZE)                    # missed a few times: still there
     assert [i["label"] for i in scene_map.sides()["right"]] == ["cup"]
     scene_map.update([], SIZE)                        # gone for good
     assert scene_map.sides()["right"] == []

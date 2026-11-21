@@ -86,6 +86,8 @@ def make_handler(hub: Hub, app):
                     self._json(404, {"error": "no scene photo yet"})
                 else:
                     self._send(200, jpeg, "image/jpeg")
+            elif url.path == "/preview.mjpg":
+                self._preview_stream()
             elif url.path == "/preview.jpg":
                 jpeg = app.preview_jpeg()
                 if jpeg is None:
@@ -100,6 +102,32 @@ def make_handler(hub: Hub, app):
                 self._events(role if role in ("patient", "nurse") else "patient")
             else:
                 self._json(404, {"error": "not found"})
+
+        def _preview_stream(self) -> None:
+            """Live camera view as a motion-JPEG stream: each new frame is
+            pushed as soon as it exists, so the picture never queues up."""
+            boundary = b"frame"
+            self.send_response(200)
+            self.send_header("Content-Type", f"multipart/x-mixed-replace; boundary={boundary.decode()}")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            last = None
+            try:
+                while True:
+                    jpeg = app.preview_jpeg()
+                    if jpeg is None:
+                        return  # preview switched off: end the stream
+                    if jpeg is not last:
+                        self.wfile.write(b"--" + boundary + b"\r\nContent-Type: image/jpeg\r\n"
+                                         + f"Content-Length: {len(jpeg)}\r\n\r\n".encode()
+                                         + jpeg + b"\r\n")
+                        self.wfile.flush()
+                        last = jpeg
+                    time.sleep(0.08)  # about 12 pictures a second
+            except OSError:
+                pass
 
         def _events(self, role: str) -> None:
             self.send_response(200)

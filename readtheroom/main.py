@@ -71,6 +71,7 @@ class App:
         self._frame = None
         self._gaze_ok = False
         self._preview_until = 0.0
+        self._preview_cache = (None, None)
         self._load_calibration()
 
     def _load_calibration(self) -> None:
@@ -121,10 +122,13 @@ class App:
     def preview_jpeg(self):
         """Small mirrored picture of what the camera sees. Nothing is drawn
         on it: the page adds a soft frame around the face. None when the
-        preview is off or there is no picture."""
+        preview is off or there is no picture. The same frame always gives
+        the same object back, so a stream can tell whether it is new."""
         frame = self._frame
         if frame is None or not self._preview_on():
             return None
+        if self._preview_cache[0] is frame:
+            return self._preview_cache[1]
         import cv2
 
         h, w = frame.shape[:2]
@@ -132,7 +136,9 @@ class App:
         img = cv2.resize(frame, (480, round(h * scale)))
         img = cv2.flip(img, 1)
         ok, jpeg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 60])
-        return jpeg.tobytes() if ok else None
+        result = jpeg.tobytes() if ok else None
+        self._preview_cache = (frame, result)
+        return result
 
     def _face_box(self):
         """Face position in the mirrored preview, as fractions of the picture."""

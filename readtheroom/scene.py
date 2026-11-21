@@ -109,7 +109,7 @@ class SceneMap:
     photos after it was last seen, so one missed detection changes nothing.
     """
 
-    def __init__(self, needs: dict, hold: int = 3, margin: float = 0.08):
+    def __init__(self, needs: dict, hold: int = 5, margin: float = 0.08):
         self.needs = needs
         self.hold = hold
         self.margin = margin

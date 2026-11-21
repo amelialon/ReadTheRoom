@@ -29,7 +29,7 @@ def main() -> None:
     p.add_argument("--url", default="http://localhost:8000")
     p.add_argument("--camera", type=int, default=0)
     p.add_argument("--photo", help="send this one picture and stop")
-    p.add_argument("--every", type=float, default=4.0, help="seconds between photos")
+    p.add_argument("--every", type=float, default=2.0, help="seconds between photos")
     args = p.parse_args()
 
     if args.photo:
