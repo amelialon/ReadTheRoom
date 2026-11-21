@@ -142,13 +142,30 @@ class GazeRay:
     def last(self) -> dict:
         return dict(self._last)
 
-    def project(self, feature, uv: dict):
-        """Where the gaze falls on the table photo, as fractions (u, v), from
-        the learned points and where their boxes are in the photo. Needs two
-        learned targets with boxes; with three or more the map is affine."""
+    def gaze_angles(self, feature, anchor=None) -> tuple | None:
+        """(left, up) in degrees: the gaze relative to the line to `anchor`
+        (a learned point), or to the camera when there is none. + is the
+        patient's left and up."""
         r = self.ray(feature)
-        known = [(t, self.points[t], uv[t]) for t in uv if t in self.points]
-        if r is None or len(known) < 2:
+        if r is None:
+            return None
+        origin, direction = r
+        ref = unit((np.asarray(anchor) if anchor is not None else np.zeros(3)) - origin)
+        yaw = math.degrees(math.atan2(direction[0], direction[2]) - math.atan2(ref[0], ref[2]))
+        pitch = math.degrees(math.asin(max(-1.0, min(1.0, direction[1]))) - math.asin(max(-1.0, min(1.0, ref[1]))))
+        return round(yaw, 1), round(pitch, 1)
+
+    # Before any spot is taught the dot still moves: the photo is assumed to
+    # be taken from the patient's seat, about this many degrees across.
+    DEFAULT_FOV = (50.0, 40.0)
+
+    def project(self, feature, uv: dict, screen: str | None = "rest"):
+        """Where the gaze falls on the table photo, as fractions (u, v).
+        With three or more taught spots the map is affine; with two, a scale
+        per axis; with one, that spot anchors a default scale; with none, the
+        camera direction anchors the middle of the photo."""
+        r = self.ray(feature)
+        if r is None:
             return None
         origin, direction = r
 
@@ -156,21 +173,32 @@ class GazeRay:
             v = unit(v)
             return (math.atan2(v[0], v[2]), math.asin(max(-1.0, min(1.0, v[1]))))
 
-        A = np.array([ang(np.asarray(p) - origin) for _, p, _ in known])
-        U = np.array([u for _, _, u in known], dtype=float)
+        known = [(t, self.points[t], uv[t]) for t in uv if t in self.points]
         g = np.array(ang(direction))
+        fov = np.radians(self.DEFAULT_FOV)
         if len(known) >= 3:
+            A = np.array([ang(np.asarray(p) - origin) for _, p, _ in known])
+            U = np.array([u for _, _, u in known], dtype=float)
             X = np.hstack([A, np.ones((len(A), 1))])
             coef, *_ = np.linalg.lstsq(X, U, rcond=None)
             out = np.array([g[0], g[1], 1.0]) @ coef
-        else:
-            # Two points: a scale per axis where they differ, the patient's
-            # left and up being the photo's left and up otherwise.
+        elif len(known) == 2:
+            A = np.array([ang(np.asarray(p) - origin) for _, p, _ in known])
+            U = np.array([u for _, _, u in known], dtype=float)
             dA, dU = A[1] - A[0], U[1] - U[0]
-            scale = float(np.linalg.norm(dU) / max(np.linalg.norm(dA), 1e-6))
-            s_u = dU[0] / dA[0] if abs(dA[0]) > 0.05 else -scale
-            s_v = dU[1] / dA[1] if abs(dA[1]) > 0.05 else -scale
+            s_u = dU[0] / dA[0] if abs(dA[0]) > 0.05 else -1 / fov[0]
+            s_v = dU[1] / dA[1] if abs(dA[1]) > 0.05 else -1 / fov[1]
             out = U[0] + np.array([s_u * (g[0] - A[0][0]), s_v * (g[1] - A[0][1])])
+        else:
+            if known:
+                _, p, u0 = known[0]
+                a0 = np.array(ang(np.asarray(p) - origin))
+            else:
+                # The camera sits by the screen, and the screen is where the
+                # photo's own screen box is, else the middle of the photo.
+                a0 = np.array(ang(-origin))
+                u0 = uv.get(screen, (0.5, 0.5)) if screen else (0.5, 0.5)
+            out = np.asarray(u0, dtype=float) + np.array([-(g[0] - a0[0]) / fov[0], -(g[1] - a0[1]) / fov[1]])
         return [round(float(min(1.1, max(-0.1, out[0]))), 3), round(float(min(1.1, max(-0.1, out[1]))), 3)]
 
     def self_check(self, samples: dict) -> dict:

@@ -141,3 +141,19 @@ def test_short_or_unreadable_frames(reader):
     assert reader.ray(np.zeros(17)) is None
     with pytest.raises(ValueError):
         reader.learn("x", [None, None])
+
+
+def test_dot_moves_before_anything_is_taught(reader):
+    home = [0, 0, -50]
+    uv = {"rest": (0.5, 0.8), "t:bottle": (0.45, 0.3)}
+    at_camera = reader.project(frame(home, 0, 0, [0, 0, 0], reader), uv)
+    assert at_camera == [0.5, 0.8]                       # nothing taught: the camera is the screen
+    to_left = reader.project(frame(home, 0, 0, [30, 0, 0], reader), uv)
+    assert to_left[0] < 0.5 and abs(to_left[1] - 0.8) < 0.05   # the patient's left is the photo's left
+    up = reader.project(frame(home, 0, 0, [0, 30, 0], reader), uv)
+    assert up[1] < 0.8
+    reader.learn("rest", [frame(home, 0, 0, SCREEN, reader)] * 5, distance_cm=45.0)
+    anchored = reader.project(frame(home, 0, 0, SCREEN, reader), uv)
+    assert anchored == [0.5, 0.8]                        # one spot: it anchors the map
+    deg = reader.gaze_angles(frame(home, 0, 0, [20, -8, -5], reader), reader.points["rest"])
+    assert deg[0] > 15 and abs(deg[1]) < 2

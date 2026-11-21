@@ -542,6 +542,7 @@ class App:
             "learned": {t: self.ray.spread.get(t) for t in self.ray.points},
             "errors": self.ray.last(),
             "gaze_uv": None if self.simulate else self.ray.project(self._feature, self.table.centres()),
+            "gaze_deg": None if self.simulate else self.ray.gaze_angles(self._feature, self.ray.points.get(REST)),
             "teaching": self._teaching,
             "ready": ready,
         })

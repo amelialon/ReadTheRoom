@@ -156,8 +156,9 @@
   .spot.other .label { color: var(--ink-2); background: rgba(255, 255, 255, .6); }
   .spot.asked .label, .spot.looking .label { background: var(--accent); color: #fff; }
   /* Table mode: the photo is the map, the dot is where the gaze falls on it. */
-  #dot { position: absolute; top: 0; left: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 999px; display: none; pointer-events: none;
-         background: var(--accent); box-shadow: 0 0 0 4px rgba(255, 255, 255, .85), 0 0 0 6px rgba(132, 162, 130, .45); transition: transform 120ms linear; }
+  #dot { position: absolute; top: 0; left: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 999px; display: none; pointer-events: none; z-index: 3;
+         background: var(--accent); box-shadow: 0 0 0 4px rgba(255, 255, 255, .85), 0 0 0 6px rgba(132, 162, 130, .45), 0 6px 18px -4px rgba(40, 42, 38, .5); transition: transform 90ms linear; }
+  #dot::after { content: ""; position: absolute; inset: -14px; border-radius: 999px; border: 1.5px solid rgba(132, 162, 130, .5); }
   .spot.calib { border-color: #e4a9c0; box-shadow: 0 0 0 4px rgba(246, 226, 233, .9); animation: breathe 1.2s infinite; }
   .spot.learned { border-color: rgba(255, 255, 255, .95); }
   @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 3px rgba(228, 169, 192, .5); } 50% { box-shadow: 0 0 0 9px rgba(228, 169, 192, .15); } }
@@ -578,17 +579,21 @@ function renderTable(s) {
   if (!tb.targets.length) tb.found.forEach((f, i) => { live.add('o:' + i); place('o:' + i, f.box, tb.size, f.label, 'other', 0); });
   for (const [key, e] of els) if (!live.has(key)) { e.box.remove(); els.delete(key); }
   const uv = tb.gaze_uv, dot = $('dot');
-  if (uv && side === 'room' && !tb.teaching) {
+  if (uv) {
     dot.style.display = 'block';
     dot.style.transform = 'translate(' + (uv[0] * $('stage').clientWidth) + 'px,' + (uv[1] * $('stage').clientHeight) + 'px)';
   } else dot.style.display = 'none';
   const names = Object.fromEntries(tb.targets.map(t => [t.id, t.label]));
   const ranked = Object.entries(tb.errors).sort((a, b) => a[1] - b[1]);
   const taught = tb.targets.filter(t => t.id in tb.learned).length;
+  const deg = tb.gaze_deg;
+  const gazeText = !deg ? 'Eyes not readable'
+    : 'Gaze ' + Math.abs(deg[0]) + '\u00b0 ' + (deg[0] >= 0 ? 'left' : 'right') + ', ' + Math.abs(deg[1]) + '\u00b0 ' + (deg[1] >= 0 ? 'up' : 'down')
+      + ('rest' in tb.learned ? ' of the screen' : ' of the camera');
   $('camHelp').textContent = tb.teaching ? 'Teaching: the patient looks at the ' + (names[tb.teaching] || 'screen')
-    : !tb.targets.length ? (tb.found.length ? 'Open Device to confirm the spots the detector found' : 'Open Device to mark the spots')
-    : taught < tb.targets.length ? 'Taught ' + taught + ' of ' + tb.targets.length + ' spots'
-    : ranked.length ? 'Nearest: ' + (names[ranked[0][0]] || 'screen') + ', ' + ranked[0][1] + '\u00b0 off' : 'Eyes not readable';
+    : !tb.targets.length ? gazeText + (tb.found.length ? '. Open Device to confirm the spots' : '. Open Device to mark the spots')
+    : taught < tb.targets.length ? gazeText + '. Taught ' + taught + ' of ' + tb.targets.length
+    : ranked.length && deg ? 'Nearest: ' + (names[ranked[0][0]] || 'screen') + ', ' + ranked[0][1] + '\u00b0 off. ' + gazeText : gazeText;
 }
 
 function renderScene(s) {
