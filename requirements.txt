@@ -4,5 +4,7 @@ numpy
 #   sudo apk add mediapipe        (brings OpenCV and NumPy)
 mediapipe
 opencv-python
+# Object detection (optional). On the QNX Pi: sudo apk add onnxruntime
+onnxruntime
 # Dev
 pytest

@@ -5,3 +5,7 @@ __pycache__/
 data/
 models/*.task
 test-output.xml
+.venv-yolo/
+models/*.pt
+models/*.onnx
+weights/

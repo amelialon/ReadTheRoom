@@ -420,3 +420,33 @@ def test_climate_text():
     assert resolve(zone, 30.0, cfg)[0] == "Are you too warm?"
     assert climate_offer(22.0, cfg) is None
     assert climate_offer(30.2, cfg)[0] == "The room is 30°C. Are you too warm?"
+
+
+# --- detector --------------------------------------------------------------
+
+def test_detector_decodes_boxes_back_to_photo_coordinates(tmp_path):
+    cv2 = pytest.importorskip("cv2")
+    pytest.importorskip("onnxruntime")
+    import json
+    from readtheroom.detector import SceneDetector
+
+    det = SceneDetector.__new__(SceneDetector)
+    det._cv2, det.words, det.size = cv2, ["bottle", "snack"], 640
+    det.min_score, det.overlap, det._input = 0.25, 0.5, "images"
+
+    class FakeSession:
+        def run(self, _, feeds):
+            assert feeds["images"].shape == (1, 3, 640, 640)
+            out = np.zeros((1, 6, 8400), dtype=np.float32)
+            # A 1280x720 photo is scaled by 0.5 and padded 140 px top and bottom.
+            out[0, :, 0] = [320, 320, 100, 50, 0.9, 0.1]    # bottle
+            out[0, :, 1] = [322, 321, 100, 50, 0.6, 0.1]    # same bottle, overlapping
+            out[0, :, 2] = [100, 200, 40, 40, 0.05, 0.7]    # snack
+            out[0, :, 3] = [500, 500, 40, 40, 0.2, 0.1]     # below the score cut-off
+            return [out]
+
+    det._session = FakeSession()
+    found = det.detect(np.zeros((720, 1280, 3), np.uint8))
+    assert [f["label"] for f in found] == ["bottle", "snack"]
+    assert found[0]["box"] == [540.0, 310.0, 740.0, 410.0]
+    assert found[1]["box"] == [160.0, 80.0, 240.0, 160.0]

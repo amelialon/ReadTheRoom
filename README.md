@@ -38,6 +38,24 @@ Then run the app:
 
 Press "Start calibration" on the nurse page and follow the instructions on the patient screen. Calibration is saved in `data/` and reused on the next start.
 
+## Object detection (not yet connected to the app)
+
+A YOLO-World model with a fixed word list finds and names objects in a photo of the room. The export needs PyTorch, so it runs on a laptop in its own environment; the result is one file that needs only ONNX Runtime.
+
+```
+python3 -m venv .venv-yolo
+.venv-yolo/bin/pip install ultralytics onnx onnxruntime onnxslim
+.venv-yolo/bin/python tools/export_yoloworld.py --words "water bottle" "snack packet" blanket sign
+```
+
+That writes `models/scene.onnx` and `models/scene.json`. To try it on a photo:
+
+```
+.venv/bin/python -m readtheroom.check_scene photo.jpg
+```
+
+It prints what it found and saves `photo.detected.jpg` with the boxes drawn. YOLO-World cannot be exported to TFLite, so on the Pi it has to run on QNX's `onnxruntime` package.
+
 ## Run on the QNX Raspberry Pi
 
 Not yet tested on the device. Expected steps:
