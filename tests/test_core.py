@@ -431,7 +431,7 @@ def test_detector_decodes_boxes_back_to_photo_coordinates(tmp_path):
     from readtheroom.detector import SceneDetector
 
     det = SceneDetector.__new__(SceneDetector)
-    det._cv2, det.words, det.size = cv2, ["bottle", "snack"], 640
+    det._cv2, det.words, det.size = cv2, ["bottle", "snack"], (640, 640)
     det.min_score, det.overlap, det._input = 0.25, 0.5, "images"
 
     class FakeSession:
@@ -450,6 +450,45 @@ def test_detector_decodes_boxes_back_to_photo_coordinates(tmp_path):
     assert [f["label"] for f in found] == ["bottle", "snack"]
     assert found[0]["box"] == [540.0, 310.0, 740.0, 410.0]
     assert found[1]["box"] == [160.0, 80.0, 240.0, 160.0]
+
+
+def test_detector_runs_a_4_by_3_model_on_a_4_by_3_photo_without_padding():
+    # The C270's whole 640x480 view fills a 480x640 model, so boxes map 1:1.
+    cv2 = pytest.importorskip("cv2")
+    from readtheroom.detector import SceneDetector
+
+    det = SceneDetector.__new__(SceneDetector)
+    det._cv2, det.words, det.size = cv2, ["bottle"], (480, 640)
+    det.min_score, det.overlap, det._input = 0.25, 0.5, "images"
+
+    class FakeSession:
+        def run(self, _, feeds):
+            assert feeds["images"].shape == (1, 3, 480, 640)
+            out = np.zeros((1, 5, 6300), dtype=np.float32)
+            out[0, :, 0] = [600, 50, 40, 20, 0.9]  # near the frame's top-right corner
+            return [out]
+
+    det._session = FakeSession()
+    found = det.detect(np.zeros((480, 640, 3), np.uint8))
+    assert found[0]["box"] == [580.0, 40.0, 620.0, 60.0]
+
+
+def test_opencv_fallback_gives_the_same_output_as_onnxruntime():
+    # The Pi runs the model through OpenCV; it must agree with ONNX Runtime.
+    import os
+    cv2 = pytest.importorskip("cv2")
+    ort = pytest.importorskip("onnxruntime")
+    from readtheroom.detector import _OpenCVSession
+
+    model = os.path.join(os.path.dirname(__file__), "..", "models", "scene.onnx")
+    if not os.path.exists(model):
+        pytest.skip("models/scene.onnx not exported")
+    session = ort.InferenceSession(model, providers=["CPUExecutionProvider"])
+    blob = np.random.default_rng(0).random(session.get_inputs()[0].shape, dtype=np.float32)
+    expected = session.run(None, {session.get_inputs()[0].name: blob})[0]
+    got = _OpenCVSession(cv2, model).run(None, {"images": blob})[0]
+    assert got.shape == expected.shape
+    assert np.abs(got - expected).max() < 0.05
 
 
 # --- scene tracking --------------------------------------------------------

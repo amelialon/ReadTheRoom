@@ -6,37 +6,64 @@ import os
 import numpy as np
 
 
+class _OpenCVSession:
+    """OpenCV's DNN module behind ONNX Runtime's run() call. QNX's
+    python3-onnxruntime ships without its compiled module, so on the Pi this
+    is what runs the model."""
+
+    def __init__(self, cv2, model_path: str):
+        # On the Pi 5, 2 cores run it nearly as fast as 4 and leave 2 for gaze.
+        cv2.setNumThreads(2)
+        self._net = cv2.dnn.readNetFromONNX(model_path)
+
+    def run(self, _outputs, feeds):
+        (blob,) = feeds.values()
+        self._net.setInput(blob)
+        return [self._net.forward()]
+
+
 class SceneDetector:
     """Finds and names objects in a picture of the room.
 
     Runs a YOLO-World model exported by tools/export_yoloworld.py. The word
-    list is baked into the model file, so this needs only ONNX Runtime and
-    OpenCV: no PyTorch and no text model.
+    list is baked into the model file, so this needs only ONNX Runtime (or
+    OpenCV when ONNX Runtime will not import): no PyTorch and no text model.
     """
 
     def __init__(self, model_path: str, min_score: float = 0.25, overlap: float = 0.5):
         import cv2
-        import onnxruntime as ort
+        try:
+            import onnxruntime as ort
+        except ImportError:
+            ort = None
 
         self._cv2 = cv2
         with open(os.path.splitext(model_path)[0] + ".json", encoding="utf-8") as f:
             meta = json.load(f)
         self.words: list = meta["words"]
-        self.size: int = meta["size"]
+        size = meta["size"]  # one number for a square model, else [height, width]
+        self.size: tuple = (size, size) if isinstance(size, int) else tuple(size)
         self.min_score = min_score
         self.overlap = overlap
-        self._session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
-        self._input = self._session.get_inputs()[0].name
+        if ort is not None:
+            self._session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+            self._input = self._session.get_inputs()[0].name
+            self.backend = "onnxruntime"
+        else:
+            self._session = _OpenCVSession(cv2, model_path)
+            self._input = "images"
+            self.backend = "opencv"
 
     def _letterbox(self, frame_bgr):
-        """Resize keeping the shape, pad to a square. Returns (image, scale, pad_x, pad_y)."""
+        """Resize keeping the shape, pad to the model size. Returns (image, scale, pad_x, pad_y)."""
         cv2 = self._cv2
         h, w = frame_bgr.shape[:2]
-        scale = min(self.size / h, self.size / w)
+        size_h, size_w = self.size
+        scale = min(size_h / h, size_w / w)
         new_w, new_h = round(w * scale), round(h * scale)
         resized = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        canvas = np.full((self.size, self.size, 3), 114, dtype=np.uint8)
-        pad_x, pad_y = (self.size - new_w) // 2, (self.size - new_h) // 2
+        canvas = np.full((size_h, size_w, 3), 114, dtype=np.uint8)
+        pad_x, pad_y = (size_w - new_w) // 2, (size_h - new_h) // 2
         canvas[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = resized
         return canvas, scale, pad_x, pad_y
 

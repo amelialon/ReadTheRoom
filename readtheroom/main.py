@@ -387,7 +387,7 @@ def _open_scene(model_path: str, zones: dict, needs: dict, quick: bool = False):
     if unknown:
         print("The detector model was not exported with these words, so it can "
               f"never find them: {', '.join(unknown)}. Re-run tools/export_yoloworld.py.")
-    print("Object detection is on. Send scene photos with: "
+    print(f"Object detection is on ({detector.backend}). Send scene photos with: "
           "python -m readtheroom.scene_sender")
     if quick:
         if not set(SCREEN_WORDS) & set(detector.words):
