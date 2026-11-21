@@ -10,3 +10,5 @@ models/*.pt
 models/*.onnx
 weights/
 .claude/
+qnx/capture
+first_hour.txt
