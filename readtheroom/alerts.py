@@ -122,6 +122,14 @@ class AlertStore:
                 del self._deadline[i]
             self._save()
 
+    def clear_answered(self) -> int:
+        """Drop answered alerts from the history. Open ones are never removed."""
+        with self._lock:
+            before = len(self._alerts)
+            self._alerts = [a for a in self._alerts if a["state"] != ACKED]
+            self._save()
+            return before - len(self._alerts)
+
     def list(self, history: int = 30) -> list:
         """Newest first: every unanswered alert, plus recent answered ones."""
         with self._lock:

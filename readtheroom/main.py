@@ -72,6 +72,7 @@ class App:
         self._gaze_ok = False
         self._preview_until = 0.0
         self._preview_cache = (None, None)
+        self._last_log = None
         self._load_calibration()
 
     def _load_calibration(self) -> None:
@@ -246,6 +247,26 @@ class App:
         self._sides = ids
         self.session.set_zones(zones)
 
+    def _log_changes(self, now: float, label) -> None:
+        """One line per change of state on the console: time, what happened,
+        and what the gaze read as. Enough to trace any false alarm."""
+        ses = self.session
+        key = (ses.state, ses.prompt["question"] if ses.prompt else None,
+               ses.menu_index if ses.state == "menu" else None, len(ses.alerts.list(0)))
+        if key == self._last_log:
+            return
+        self._last_log = key
+        stamp = time.strftime("%H:%M:%S")
+        if ses.state == "prompt":
+            what = f"asking: {ses.prompt['question']}"
+        elif ses.state == "menu":
+            what = f"menu: {ses.menu[ses.menu_index].label}"
+        elif ses.state == "sent":
+            what = f"SENT: {ses.alerts.list()[0]['message']}"
+        else:
+            what = "idle"
+        print(f"[{stamp}] {what}   (gaze read as: {label})", flush=True)
+
     def _finish_calibration(self, now: float) -> None:
         self.session.reset(now)
         if self.quick:
@@ -291,6 +312,7 @@ class App:
         else:
             self.session.update(now, label, face, self._temp)
         self.alerts.tick()
+        self._log_changes(now, label)
         lost = self.session.face_lost_s(now)
         self.hub.publish({
             "bed": self.cfg.bed,

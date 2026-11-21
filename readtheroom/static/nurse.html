@@ -44,7 +44,7 @@
 </header>
 <div id="banner"></div>
 <section>
-  <h2>Requests</h2>
+  <h2>Requests <button class="light" id="clearDone" style="font-size:13px;padding:5px 10px;margin-left:10px">Clear answered</button></h2>
   <div id="empty">No requests yet.</div>
   <div id="alerts"></div>
 </section>
@@ -227,6 +227,7 @@ setInterval(() => {
 }, 300);
 pv.onerror = () => { streaming = false; };
 $('relearn').onclick = () => post('/api/scene/reset');
+$('clearDone').onclick = () => post('/api/alerts/clear');
 $('setT').onclick = () => post('/api/debug/temp', {temp_c: parseFloat($('t').value)});
 $('clearT').onclick = () => post('/api/debug/temp', {temp_c: null});
 let lastMessage = 0, bedName = 'Device';

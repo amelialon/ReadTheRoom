@@ -179,6 +179,8 @@ def make_handler(hub: Hub, app):
             try:
                 if path == "/api/preview":
                     return self._json(200, {"ok": app.set_preview(body.get("on") is True)})
+                if path == "/api/alerts/clear":
+                    return self._json(200, {"cleared": app.alerts.clear_answered()})
                 if path == "/api/scene/reset":
                     return self._json(200, {"ok": app.reset_scene()})
                 if path == "/api/ack":
