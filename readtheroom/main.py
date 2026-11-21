@@ -12,7 +12,7 @@ from .calibration import Calibrator, control_targets
 from .config import ANSWER_MODES, Config, NO, REST, YES
 from .directions import CENTRE, LEFT, RIGHT, UP, DirectionReader
 from .features import Ema
-from .prompts import load_menu, load_needs, load_zones
+from .prompts import Zone, load_menu, load_needs, load_zones
 from .server import Hub, serve
 from .session import Session
 from .zones import ZoneClassifier
@@ -21,7 +21,7 @@ from .zones import ZoneClassifier
 class App:
     def __init__(self, cfg: Config, zones: dict, data_dir: str, hub: Hub,
                  source=None, extractor=None, sensor=None, simulate: bool = False,
-                 scene=None, menu=()):
+                 scene=None, menu=(), needs=None):
         self.cfg = cfg
         self.zones = zones
         self.hub = hub
@@ -51,6 +51,10 @@ class App:
         if self.quick:
             self.reader = DirectionReader(cfg.dir_h_threshold, cfg.dir_v_threshold, cfg.dir_adapt)
             self._slots = {z.slot: z.id for z in zones.values() if z.slot}
+            # Direction -> zone ids to ask about, in order. Filled from the
+            # scene camera when it sees objects; the typed slots otherwise.
+            self._sides = {side: [zid] for side, zid in self._slots.items()}
+            self._needs = needs or {}
             self.calibrator = Calibrator([(REST, "Hello. Look here for a moment.")],
                                          cfg.greet_settle_s, cfg.greet_record_s, passes=1)
             self._greet_after = 0.0
@@ -205,10 +209,36 @@ class App:
         if state == "idle":
             # Session opens the menu on a long hold of NO while idle; in quick
             # mode that hold is "up", since right is an object.
-            return NO if direction == UP else self._slots.get(direction)
+            if direction == UP:
+                return NO
+            # Several objects may lie the same way: ask about the first one
+            # the patient has not just said NO to.
+            for zone_id in self._sides.get(direction, ()):
+                if not self.session.is_backed_off(zone_id, now):
+                    return zone_id
+            return None
         if state in ("prompt", "menu"):
             return {LEFT: YES, RIGHT: NO}.get(direction)
         return None
+
+    def _apply_scene_map(self) -> None:
+        """Let the scene decide what is to the left and right. With nothing
+        recognised, fall back to the objects typed into the zones file."""
+        sides = self.scene.sides()
+        if not any(sides.values()):
+            self._sides = {side: [zid] for side, zid in self._slots.items()}
+            self.session.set_zones(self.zones)
+            return
+        zones, ids = {}, {}
+        for side, items in sides.items():
+            ids[side] = []
+            for item in items:
+                need = self._needs[item["label"]]
+                zones[item["id"]] = Zone(item["id"], item["label"], need["question"],
+                                         need["message"], bool(need.get("urgent", False)))
+                ids[side].append(item["id"])
+        self._sides = ids
+        self.session.set_zones(zones)
 
     def _finish_calibration(self, now: float) -> None:
         self.session.reset(now)
@@ -242,7 +272,10 @@ class App:
             self.calibrator.start(now)
         if self.scene is not None and self.scene.version != self._scene_version:
             self._scene_version = self.scene.version
-            self.session.set_overrides(self.scene.overrides())
+            if self.quick:
+                self._apply_scene_map()
+            else:
+                self.session.set_overrides(self.scene.overrides())
         label, face = self._perceive(now)
         self._last = (label, face)
         ready = self.simulate or (self.reader.centre is not None if self.quick
@@ -256,7 +289,8 @@ class App:
         self.hub.publish({
             "bed": self.cfg.bed,
             "time": time.time(),
-            "zones": [{"id": zid, "label": self.session.zone(zid).label} for zid in self.zones],
+            "zones": [{"id": zid, "label": self.session.zone(zid).label}
+                      for zid in self.session.zones],
             "scene": None if self.scene is None else self.scene.snapshot(),
             "session": self.session.snapshot(now),
             "calibration": self.calibrator.snapshot(now),
@@ -275,7 +309,7 @@ class App:
                 "simulate": self.simulate,
                 "answer_mode": self.cfg.answer_mode,
                 "gaze_mode": "simulate" if self.simulate else ("quick" if self.quick else "trained"),
-                "slots": self._slots if self.quick and not self.simulate else None,
+                "sides": self._sides if self.quick and not self.simulate else None,
                 "preview": self._preview_on(),
                 "face_width": self._face_width(),
                 "face_box": self._face_box(),
@@ -302,14 +336,14 @@ class App:
             time.sleep(max(0.0, period - (time.monotonic() - now)))
 
 
-def _open_scene(model_path: str, zones: dict, needs: dict):
+def _open_scene(model_path: str, zones: dict, needs: dict, quick: bool = False):
     """Object detection for scene photos, or None if it cannot be used."""
     if not os.path.exists(model_path):
         print("No object detector model; spots keep their typed labels.")
         return None
     try:
         from .detector import SceneDetector
-        from .scene import SceneTracker, SceneWorker
+        from .scene import SCREEN_WORDS, SceneMap, SceneTracker, SceneWorker
 
         detector = SceneDetector(model_path)
     except Exception as exc:
@@ -322,6 +356,11 @@ def _open_scene(model_path: str, zones: dict, needs: dict):
               f"never find them: {', '.join(unknown)}. Re-run tools/export_yoloworld.py.")
     print("Object detection is on. Send scene photos with: "
           "python -m readtheroom.scene_sender")
+    if quick:
+        if not set(SCREEN_WORDS) & set(detector.words):
+            print("The detector cannot recognise the patient screen, so the scene "
+                  "camera must be aimed with the screen in the middle of its picture.")
+        return SceneWorker(detector, SceneMap(needs))
     return SceneWorker(detector, SceneTracker(zones, needs))
 
 
@@ -376,10 +415,12 @@ def main() -> None:
         source = FileFrameSource(args.frame_file) if args.frame_file else OpenCVCamera(args.camera)
         sensor = open_sensor()
 
-    scene = _open_scene(args.scene_model, zones, load_needs(args.zones))
+    needs = load_needs(args.zones)
+    quick = cfg.gaze_mode == "quick" and cfg.answer_mode == "horizontal" and not args.simulate
+    scene = _open_scene(args.scene_model, zones, needs, quick)
     hub = Hub()
     app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate, scene,
-              load_menu(args.zones))
+              load_menu(args.zones), needs=needs)
     serve(hub, app, args.host, args.port)
     print(f"Patient screen: http://localhost:{args.port}/")
     print(f"Nurse station:  http://localhost:{args.port}/nurse")

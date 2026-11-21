@@ -694,3 +694,99 @@ def test_quick_mode_no_and_menu(quick_app):
     run(centre, 1.2)
     run(left, 1.6)                       # YES: pain
     assert app.alerts.list()[0]["urgent"] is True and "PAIN" in app.alerts.list()[0]["message"]
+
+
+# --- scene map: what lies to the left and right of the screen -----------------
+
+SIZE = (1280, 720)
+SCREEN = det("laptop", [540, 260, 740, 460], 0.9)   # centre x = 640
+
+
+@pytest.fixture
+def scene_map():
+    from readtheroom.scene import SceneMap
+    return SceneMap(NEEDS)
+
+
+def test_scene_map_places_objects_by_where_they_are(scene_map):
+    scene_map.update([SCREEN, det("water bottle", [100, 300, 180, 460]),
+                      det("cup", [1000, 320, 1080, 420]), det("sign", [50, 50, 90, 90])], SIZE)
+    sides = scene_map.sides()
+    assert [i["label"] for i in sides["left"]] == ["water bottle"]
+    assert [i["label"] for i in sides["right"]] == ["cup"]       # "sign" has no question: ignored
+    # Move the bottle to the other side: the map follows, nothing is typed in.
+    for _ in range(4):
+        scene_map.update([SCREEN, det("water bottle", [900, 300, 980, 460]),
+                          det("cup", [1000, 320, 1080, 420])], SIZE)
+    sides = scene_map.sides()
+    assert sides["left"] == [] and {i["label"] for i in sides["right"]} == {"water bottle", "cup"}
+
+
+def test_scene_map_orders_objects_that_share_a_side(scene_map):
+    scene_map.update([SCREEN, det("book", [100, 20, 200, 90]),          # high up on the left
+                      det("water bottle", [150, 330, 210, 400])], SIZE)  # level with the screen
+    assert [i["label"] for i in scene_map.sides()["left"]] == ["water bottle", "book"]
+
+
+def test_scene_map_survives_missed_detections_then_forgets(scene_map):
+    scene_map.update([SCREEN, det("cup", [1000, 320, 1080, 420])], SIZE)
+    for _ in range(3):
+        scene_map.update([], SIZE)                    # missed three times: still there
+    assert [i["label"] for i in scene_map.sides()["right"]] == ["cup"]
+    scene_map.update([], SIZE)                        # gone for good
+    assert scene_map.sides()["right"] == []
+
+
+def test_scene_map_refuses_objects_in_line_with_the_screen(scene_map):
+    scene_map.update([SCREEN, det("cup", [610, 100, 680, 170])], SIZE)   # right above the screen
+    assert scene_map.sides() == {"left": [], "right": []}
+    row = scene_map.status()[0]
+    assert row["side"] is None and row["now"] == "cup"
+
+
+def test_scene_map_without_a_visible_screen_uses_the_middle(scene_map):
+    scene_map.update([det("cup", [100, 300, 180, 400]), det("book", [1100, 300, 1200, 400])], SIZE)
+    sides = scene_map.sides()
+    assert [i["label"] for i in sides["left"]] == ["cup"] and [i["label"] for i in sides["right"]] == ["book"]
+    assert scene_map.screen is None
+
+
+class _FakeScene:
+    """Stands in for the scene worker: the test sets what lies each way."""
+    def __init__(self):
+        self.version, self._sides = 0, {"left": [], "right": []}
+
+    def set(self, left=(), right=()):
+        from readtheroom.scene import SceneMap
+        make = lambda side, labels: [{"id": SceneMap.zone_id(l, side), "label": l, "box": [0, 0, 1, 1]}
+                                     for l in labels]
+        self._sides = {"left": make("left", left), "right": make("right", right)}
+        self.version += 1
+
+    def sides(self): return self._sides
+    def overrides(self): return {}
+    def snapshot(self): return {}
+
+
+def test_gaze_plus_scene_asks_about_what_is_really_there(quick_app, tmp_path):
+    app, run = quick_app
+    centre, left, right = _look(), _look(out_l=0.5), _look(in_l=0.5)
+    app.scene, app._needs = _FakeScene(), NEEDS
+    app.scene.set(left=["cup", "book"], right=["water bottle"])
+    run(centre, 3.0)
+    run(left, 2.0)                            # two things are to the left: the nearer one first
+    assert app.session.prompt["question"] == "Want a drink?"
+    run(centre, 1.2); run(right, 1.6)         # NO
+    assert app.session.state == IDLE
+    run(centre, 1.0); run(left, 2.0)          # look left again: now it asks about the other one
+    assert app.session.prompt["question"] == "Want to read?"
+    run(centre, 1.2); run(left, 1.6)          # YES
+    assert app.alerts.list()[0]["message"] == "Bed 4: patient wants their book"
+    run(centre, 5.0)
+    app.scene.set(left=["water bottle"], right=[])   # the room changed
+    run(centre, 0.5); run(left, 2.0)
+    assert app.session.prompt["question"] == "Thirsty?"
+    run(centre, 1.2); run(right, 1.6)
+    app.scene.set()                           # scene camera sees nothing it knows
+    run(centre, 0.5); run(left, 2.0)          # falls back to the typed objects
+    assert "thirsty" in app.session.prompt["question"].lower()

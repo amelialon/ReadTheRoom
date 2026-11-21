@@ -183,9 +183,14 @@ function render(s) {
       : (sc.age_s > 30 ? 'SCENE CAMERA SILENT for ' + Math.round(sc.age_s) + ' s. ' : 'Last photo ' + Math.round(sc.age_s) + ' s ago. ')
         + 'Scan took ' + sc.ms + ' ms. Sees: '
         + (sc.found.map(f => f.label + ' ' + Math.round(f.score * 100) + '%').join(', ') || 'nothing it knows') + '.';
-    const lines = sc.spots.map(p => p.zone + ': '
+    const lines = sc.spots.map(p => p.side !== undefined
+      ? (p.side ? "On the patient's " + p.side + ': ' + p.now + (p.seen ? '' : ' (not visible in the last photo)')
+                : p.now + ': too close to the screen to tell left from right. Move it further to one side.')
+      : p.zone + ': '
       + (!p.located ? 'not found yet (expecting a ' + p.expected + ')'
          : p.now + (p.now !== p.expected ? ' (was ' + p.expected + ')' : '') + (p.seen ? '' : ', not visible in the last photo')));
+    if (st.gaze_mode === 'quick') lines.unshift(sc.screen ? 'Patient screen found in the picture.'
+      : 'Patient screen not recognised: aim the scene camera so the screen is in the middle.');
     const list = $('spots');
     if (list.dataset.key !== lines.join('|')) {
       list.dataset.key = lines.join('|');

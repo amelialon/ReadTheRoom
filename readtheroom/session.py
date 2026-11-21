@@ -61,6 +61,17 @@ class Session:
     def zone(self, zone_id: str):
         return self._overrides.get(zone_id, self.zones[zone_id])
 
+    def set_zones(self, zones: dict) -> None:
+        """Replace what can be looked at, e.g. when the scene camera sees the
+        objects change. Back-offs on objects that are still there are kept."""
+        self.zones = zones
+        self._overrides = {}
+        self._backoff_until = {k: v for k, v in self._backoff_until.items()
+                               if k in zones or k.startswith("_")}
+
+    def is_backed_off(self, zone_id: str, now: float) -> bool:
+        return self._backed_off(zone_id, now)
+
     def set_overrides(self, overrides: dict) -> None:
         """Called when the scene camera finds a different object at a spot.
         A changed spot is a new question, so any back-off on it is lifted."""

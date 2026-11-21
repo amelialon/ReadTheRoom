@@ -14,7 +14,8 @@ import os
 import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_WORDS = ["water bottle", "snack packet", "blanket", "sign", "cup", "book",
+# "laptop" and "monitor" let the scene camera find the patient screen.
+DEFAULT_WORDS = ["laptop", "monitor", "water bottle", "snack packet", "blanket", "sign", "cup", "book",
                  "remote control", "phone", "pillow", "tissue box", "pill bottle", "fan"]
 
 

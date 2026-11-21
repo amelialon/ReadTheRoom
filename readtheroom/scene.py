@@ -39,7 +39,7 @@ class SceneTracker:
         self._seen: dict = {}      # zone id -> something recognised there in the last photo
         self._pending: dict = {}   # zone id -> (word, photos in a row)
 
-    def update(self, detections: list) -> None:
+    def update(self, detections: list, size=None) -> None:
         for zid, zone in self.zones.items():
             if zid not in self._spot:
                 expected = [d for d in detections if d["label"] == zone.detect]
@@ -90,6 +90,107 @@ class SceneTracker:
                  "now": self._current.get(zid),
                  "seen": self._seen.get(zid, False)}
                 for zid, zone in self.zones.items()]
+
+
+SCREEN_WORDS = ("laptop", "monitor", "screen")
+
+
+class SceneMap:
+    """Where each recognised object lies relative to the patient screen.
+
+    The scene camera looks the way the patient looks, so an object left of
+    the screen in its picture is to the patient's left. Gaze only gives a
+    direction; this map says what is actually in that direction, so the
+    device can ask about it. Nothing is typed in: objects are whatever the
+    detector finds that the needs table has a question for.
+
+    Objects close to the screen's own line of sight cannot be placed left or
+    right and are listed as unplaced. An object stays on the map for `hold`
+    photos after it was last seen, so one missed detection changes nothing.
+    """
+
+    def __init__(self, needs: dict, hold: int = 3, margin: float = 0.08):
+        self.needs = needs
+        self.hold = hold
+        self.margin = margin
+        self.reset()
+
+    def reset(self) -> None:
+        self._objects: dict = {}   # (label, side) -> {box, score, age, dx, dy}
+        self._unplaced: dict = {}  # label -> age
+        self._screen = None        # box of the patient screen in the photo
+        self._screen_age = 0
+
+    def update(self, detections: list, size=None) -> None:
+        if not size:
+            return
+        w, h = size
+        screens = [d for d in detections if d["label"] in SCREEN_WORDS]
+        if screens:
+            self._screen = max(screens, key=lambda d: d["score"])["box"]
+            self._screen_age = 0
+        elif self._screen is not None:
+            self._screen_age += 1
+            if self._screen_age > self.hold * 3:
+                self._screen = None
+        if self._screen is not None:
+            cx = (self._screen[0] + self._screen[2]) / 2
+            cy = (self._screen[1] + self._screen[3]) / 2
+            half = (self._screen[2] - self._screen[0]) / 2
+        else:  # setup rule: the scene camera is aimed at the screen
+            cx, cy, half = w / 2, h / 2, 0.0
+        limit = max(self.margin * w, 0.6 * half)
+
+        for entry in self._objects.values():
+            entry["age"] += 1
+        for label in self._unplaced:
+            self._unplaced[label] += 1
+        for d in detections:
+            if d["label"] not in self.needs:
+                continue
+            ox, oy = (d["box"][0] + d["box"][2]) / 2, (d["box"][1] + d["box"][3]) / 2
+            dx = ox - cx
+            if abs(dx) < limit:
+                self._unplaced[d["label"]] = 0
+                continue
+            key = (d["label"], "left" if dx < 0 else "right")
+            old = self._objects.get(key)
+            if old is None or old["age"] > 0 or d["score"] > old["score"]:
+                self._objects[key] = {"box": d["box"], "score": d["score"], "age": 0,
+                                      "dx": abs(dx), "dy": abs(oy - cy)}
+        self._objects = {k: v for k, v in self._objects.items() if v["age"] <= self.hold}
+        self._unplaced = {k: v for k, v in self._unplaced.items() if v <= self.hold}
+
+    @staticmethod
+    def zone_id(label: str, side: str) -> str:
+        return f"obj:{side}:{label}"
+
+    def sides(self) -> dict:
+        """{'left': [...], 'right': [...]}, each nearest the screen's height first."""
+        out = {"left": [], "right": []}
+        for (label, side), entry in self._objects.items():
+            out[side].append({"id": self.zone_id(label, side), "label": label,
+                              "box": entry["box"], "order": (entry["dy"], entry["dx"])})
+        for items in out.values():
+            items.sort(key=lambda item: item["order"])
+        return out
+
+    def overrides(self) -> dict:
+        return {}
+
+    def status(self) -> list:
+        rows = [{"zone": self.zone_id(label, side), "expected": label, "located": True,
+                 "box": entry["box"], "now": label, "seen": entry["age"] == 0, "side": side}
+                for (label, side), entry in sorted(self._objects.items(), key=lambda kv: kv[0][1])]
+        rows += [{"zone": None, "expected": label, "located": False, "box": None,
+                  "now": label, "seen": age == 0, "side": None}
+                 for label, age in self._unplaced.items()
+                 if not any(k[0] == label for k in self._objects)]
+        return rows
+
+    @property
+    def screen(self):
+        return self._screen
 
 
 class SceneWorker:
@@ -152,7 +253,7 @@ class SceneWorker:
             error = f"Object detection failed: {exc}"
         with self._lock:
             if error is None:
-                self._tracker.update(found)
+                self._tracker.update(found, size)
                 self._found = found
                 self._photo, self._size = jpeg, size
                 self._photo_id += 1
@@ -164,6 +265,11 @@ class SceneWorker:
     def overrides(self) -> dict:
         with self._lock:
             return self._tracker.overrides()
+
+    def sides(self) -> dict:
+        """Objects to the patient's left and right (SceneMap only; else empty)."""
+        with self._lock:
+            return self._tracker.sides() if hasattr(self._tracker, "sides") else {}
 
     def photo(self):
         """The last scene photo, for the room view. It shows the objects, not the patient."""
@@ -177,4 +283,5 @@ class SceneWorker:
                     "photo_id": self._photo_id, "size": self._size,
                     "found": [{"label": d["label"], "score": d["score"], "box": d["box"]}
                               for d in self._found],
+                    "screen": getattr(self._tracker, "screen", None),
                     "spots": self._tracker.status()}

@@ -51,8 +51,8 @@
   #moreTop .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #6cb0ff;
                    opacity: .35; transition: width .1s linear; }
   #moreTop span { position: relative; }
-  body.slots .side { font-size: 3.4vw; color: #8b98a8; border-color: #24303d; text-align: center;
-                     padding: 0 1vw; line-height: 1.15; }
+  body.slots .side { border-color: #131a22; }
+  body.slots main #headline { font-size: 3.2vw; color: #b9c4d0; }
   body.slots #yes .fill, body.slots #no .fill { background: #6cb0ff; }
   body.slots #moreTop { display: block; }
   body.vertical { grid-template-columns: 1fr; grid-template-rows: 22% 1fr 22%; }
@@ -106,7 +106,7 @@ function render(s) {
   fill('yes', 0); fill('no', 0);
   $('bar').style.visibility = 'hidden';
   let headline = '', sub = '', count = '', noText = 'NO', yesText = 'YES';
-  const quick = st.gaze_mode === 'quick' && st.slots;
+  const quick = st.gaze_mode === 'quick' && st.sides;
   $('moreTop').querySelector('.fill').style.width = '0';
 
   if (cal.active) {
@@ -143,18 +143,16 @@ function render(s) {
     headline = 'Look at what you need';
     if (quick) {
       // Objects sit to the left and right of the screen; up opens the menu.
+      // Nothing to pick from on the screen: the patient looks at the real
+      // object. The side only glows to show the device has noticed.
       mode('slots');
-      const name = side => { const z = s.zones.find(z => z.id === st.slots[side]); return z ? z.label : ''; };
-      yesText = name('left'); noText = name('right');
-      const parts = [];
-      if (yesText) parts.push('left for the ' + yesText);
-      if (noText) parts.push('right for the ' + noText);
-      if (ses.more) parts.push('up for anything else');
-      sub = 'Look ' + parts.join(', ') + ', and keep looking.';
+      yesText = ''; noText = '';
+      headline = "I'm watching for what you need";
+      sub = 'Look at what you want and keep looking.' + (ses.more ? ' Look up for anything else.' : '');
       $('moreTop').style.visibility = ses.more ? 'visible' : 'hidden';
       $('moreTop').querySelector('.fill').style.width = (ses.more_progress * 100) + '%';
-      if (ses.leader === st.slots.left) fill('yes', ses.progress);
-      if (ses.leader === st.slots.right) fill('no', ses.progress);
+      if ((st.sides.left || []).includes(ses.leader)) fill('yes', ses.progress);
+      if ((st.sides.right || []).includes(ses.leader)) fill('no', ses.progress);
     } else if (ses.more) {
       mode('more');
       noText = 'MORE';
