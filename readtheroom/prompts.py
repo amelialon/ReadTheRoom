@@ -14,6 +14,7 @@ class Zone:
     message: str
     urgent: bool = False
     climate: bool = False  # question adapts to room temperature
+    detect: str | None = None  # object the scene camera should find at this spot
 
 
 def load_zones(path: str) -> dict:
@@ -30,6 +31,16 @@ def load_zones(path: str) -> dict:
     if not zones:
         raise ValueError("zones file has no zones")
     return zones
+
+
+def load_needs(path: str) -> dict:
+    """Question and message for each object the scene camera can recognise."""
+    with open(path, encoding="utf-8") as f:
+        needs = json.load(f).get("needs", {})
+    for word, need in needs.items():
+        if not isinstance(need.get("question"), str) or not isinstance(need.get("message"), str):
+            raise ValueError(f"need {word!r} must have a question and a message")
+    return needs
 
 
 def _climate(temp_c: float | None, cfg: Config):

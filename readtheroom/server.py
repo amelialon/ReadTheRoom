@@ -4,12 +4,14 @@ import json
 import math
 import os
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 PAGES = {"/": "patient.html", "/nurse": "nurse.html"}
 MAX_BODY = 10_000
+MAX_PHOTO = 4_000_000
 
 
 class Hub:
@@ -20,11 +22,13 @@ class Hub:
         self._version = 0
         self._state: dict = {}
         self._clients = {"patient": 0, "nurse": 0}
+        self._published_at: float | None = None
 
     def publish(self, state: dict) -> None:
         with self._cond:
             self._state = state
             self._version += 1
+            self._published_at = time.monotonic()
             self._cond.notify_all()
 
     def wait(self, seen: int, timeout: float):
@@ -32,6 +36,13 @@ class Hub:
             if self._version == seen:
                 self._cond.wait(timeout)
             return self._version, self._state
+
+    def age(self) -> float | None:
+        """Seconds since the main loop last published; None before the first."""
+        with self._cond:
+            if self._published_at is None:
+                return None
+            return time.monotonic() - self._published_at
 
     def join(self, role: str) -> None:
         with self._cond:
@@ -69,6 +80,9 @@ def make_handler(hub: Hub, app):
             if url.path in PAGES:
                 with open(os.path.join(STATIC, PAGES[url.path]), "rb") as f:
                     self._send(200, f.read(), "text/html; charset=utf-8")
+            elif url.path == "/health":
+                age = hub.age()
+                self._json(200, {"age_s": None if age is None else round(age, 2)})
             elif url.path == "/events":
                 role = parse_qs(url.query).get("role", ["patient"])[0]
                 self._events(role if role in ("patient", "nurse") else "patient")
@@ -106,17 +120,25 @@ def make_handler(hub: Hub, app):
                 length = int(self.headers.get("Content-Length", "0"))
             except ValueError:
                 length = -1
-            if not 0 <= length <= MAX_BODY:
+            path = urlparse(self.path).path
+            limit = MAX_PHOTO if path == "/api/scene" else MAX_BODY
+            if not 0 <= length <= limit:
                 self.close_connection = True
                 return self._json(400, {"error": "bad length"})
+            raw = self.rfile.read(length)
+            if path == "/api/scene":
+                if not raw:
+                    return self._json(400, {"error": "empty photo"})
+                return self._json(200, {"ok": app.submit_scene(raw)})
             try:
-                body = json.loads(self.rfile.read(length) or b"{}")
+                body = json.loads(raw or b"{}")
                 if not isinstance(body, dict):
                     raise ValueError
             except ValueError:
                 return self._json(400, {"error": "bad json"})
-            path = urlparse(self.path).path
             try:
+                if path == "/api/scene/reset":
+                    return self._json(200, {"ok": app.reset_scene()})
                 if path == "/api/ack":
                     return self._json(200, {"ok": app.alerts.ack(int(body["id"]))})
                 if path == "/api/calibrate":

@@ -53,6 +53,12 @@
   <button id="calibrate">Start calibration</button>
   <div id="check"></div>
 </section>
+<section id="scene" style="display:none">
+  <h2>Room scan</h2>
+  <div id="sceneStatus"></div>
+  <ul id="spots"></ul>
+  <button class="light" id="relearn">Learn spots again</button>
+</section>
 <section id="debug">
   <h2>Simulation: where is the patient looking?</h2>
   <div id="gaze"></div>
@@ -130,6 +136,24 @@ function render(s) {
            + '. Move these further from other targets, add light, and calibrate again.' : '')
     : 'Calibrated (loaded from last run).';
 
+  if (s.scene) {
+    const sc = s.scene;
+    $('scene').style.display = 'block';
+    $('sceneStatus').textContent = sc.age_s == null ? 'Waiting for the first photo from the scene camera.'
+      : sc.error ? sc.error
+      : (sc.age_s > 30 ? 'SCENE CAMERA SILENT for ' + Math.round(sc.age_s) + ' s. ' : 'Last photo ' + Math.round(sc.age_s) + ' s ago. ')
+        + 'Scan took ' + sc.ms + ' ms. Sees: '
+        + (sc.found.map(f => f.label + ' ' + Math.round(f.score * 100) + '%').join(', ') || 'nothing it knows') + '.';
+    const lines = sc.spots.map(p => p.zone + ': '
+      + (!p.located ? 'not found yet (expecting a ' + p.expected + ')'
+         : p.now + (p.now !== p.expected ? ' (was ' + p.expected + ')' : '') + (p.seen ? '' : ', not visible in the last photo')));
+    const list = $('spots');
+    if (list.dataset.key !== lines.join('|')) {
+      list.dataset.key = lines.join('|');
+      list.replaceChildren(...lines.map(t => { const li = document.createElement('li'); li.textContent = t; return li; }));
+    }
+  }
+
   if (st.simulate && !debugBuilt) {
     debugBuilt = true;
     $('debug').style.display = 'block';
@@ -145,6 +169,7 @@ function render(s) {
 }
 
 $('calibrate').onclick = () => post('/api/calibrate');
+$('relearn').onclick = () => post('/api/scene/reset');
 $('setT').onclick = () => post('/api/debug/temp', {temp_c: parseFloat($('t').value)});
 $('clearT').onclick = () => post('/api/debug/temp', {temp_c: null});
 let lastMessage = 0, bedName = 'Device';

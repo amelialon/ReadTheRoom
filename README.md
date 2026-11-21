@@ -38,23 +38,46 @@ Then run the app:
 
 Press "Start calibration" on the nurse page and follow the instructions on the patient screen. Calibration is saved in `data/` and reused on the next start.
 
-## Object detection (not yet connected to the app)
+## Object detection (the scene camera)
 
-A YOLO-World model with a fixed word list finds and names objects in a photo of the room. The export needs PyTorch, so it runs on a laptop in its own environment; the result is one file that needs only ONNX Runtime.
+A second camera that faces the objects lets the device notice when the object at a spot changes: swap the water bottle for a cup and the question changes with it. A YOLO-World model with a fixed word list does the recognising.
+
+One-time export on a laptop (needs PyTorch, so it has its own environment). The result is one file that needs only ONNX Runtime:
 
 ```
 python3 -m venv .venv-yolo
 .venv-yolo/bin/pip install ultralytics onnx onnxruntime onnxslim
-.venv-yolo/bin/python tools/export_yoloworld.py --words "water bottle" "snack packet" blanket sign
+.venv-yolo/bin/python tools/export_yoloworld.py
 ```
 
-That writes `models/scene.onnx` and `models/scene.json`. To try it on a photo:
+That writes `models/scene.onnx` and `models/scene.json`. The app turns object detection on when it finds that file. Try the detector on a photo first:
 
 ```
 .venv/bin/python -m readtheroom.check_scene photo.jpg
 ```
 
-It prints what it found and saves `photo.detected.jpg` with the boxes drawn. YOLO-World cannot be exported to TFLite, so on the Pi it has to run on QNX's `onnxruntime` package.
+Then, on the laptop whose camera faces the objects, send a photo to the device every few seconds:
+
+```
+.venv/bin/python -m readtheroom.scene_sender --url http://DEVICE:8000 --camera 0
+```
+
+How it behaves:
+
+- Each zone in `config/zones.json` names the object expected at its spot (`detect`). The first photo that shows it fixes where that spot is.
+- If a different object from the `needs` table sits there in two photos in a row, the zone asks about that object instead.
+- If the detector just misses the object, nothing changes.
+- The nurse page shows what the last photo contained and what each spot currently holds.
+
+The words in `zones.json` must be in the exported model's word list; the app says so at start-up if they are not. YOLO-World cannot be exported to TFLite, so on the Pi it has to run on QNX's `onnxruntime` package.
+
+## Keeping it running
+
+```
+.venv/bin/python -m readtheroom.supervisor -- --camera 0
+```
+
+The supervisor starts the app and restarts it if it exits or its main loop stops for more than 5 seconds. Open requests are saved to disk, so they are still on the nurse page after a restart, marked overdue.
 
 ## Run on the QNX Raspberry Pi
 
@@ -76,6 +99,8 @@ QNX does not expose the webcam through OpenCV, so `--frame-file` reads frames th
 | `readtheroom/zones.py`, `calibration.py` | Learns which measurements mean which object |
 | `readtheroom/dwell.py`, `session.py` | Glance → question → YES/NO → alert, with back-off |
 | `readtheroom/alerts.py` | Requests, acknowledgement, escalation after 60 s, saved to disk |
+| `readtheroom/detector.py`, `scene.py`, `scene_sender.py` | Object detection on scene photos and tracking what is at each spot |
+| `readtheroom/supervisor.py` | Restarts the app if it stops |
 | `readtheroom/server.py`, `static/` | Patient screen and nurse station |
 | `readtheroom/config.py` | All timings and thresholds |
 

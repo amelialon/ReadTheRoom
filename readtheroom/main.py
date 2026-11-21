@@ -11,7 +11,7 @@ from .alerts import AlertStore
 from .calibration import Calibrator
 from .config import NO, REST, YES, Config
 from .features import Ema
-from .prompts import load_zones
+from .prompts import load_needs, load_zones
 from .server import Hub, serve
 from .session import Session
 from .zones import ZoneClassifier
@@ -19,7 +19,8 @@ from .zones import ZoneClassifier
 
 class App:
     def __init__(self, cfg: Config, zones: dict, data_dir: str, hub: Hub,
-                 source=None, extractor=None, sensor=None, simulate: bool = False):
+                 source=None, extractor=None, sensor=None, simulate: bool = False,
+                 scene=None):
         self.cfg = cfg
         self.zones = zones
         self.hub = hub
@@ -27,6 +28,8 @@ class App:
         self.extractor = extractor
         self.sensor = sensor
         self.simulate = simulate
+        self.scene = scene  # SceneWorker, or None when object detection is off
+        self._scene_version = 0
         os.makedirs(data_dir, exist_ok=True)
         self._calibration_path = os.path.join(data_dir, "calibration.json")
         self.alerts = AlertStore(cfg.escalate_after_s, os.path.join(data_dir, "alerts.json"))
@@ -65,6 +68,18 @@ class App:
         if self.simulate:
             return False
         self._want_calibration = True
+        return True
+
+    def submit_scene(self, jpeg: bytes) -> bool:
+        if self.scene is None:
+            return False
+        self.scene.submit(jpeg)
+        return True
+
+    def reset_scene(self) -> bool:
+        if self.scene is None:
+            return False
+        self.scene.reset()
         return True
 
     def set_debug_gaze(self, label) -> None:
@@ -123,6 +138,9 @@ class App:
         if self._want_calibration:
             self._want_calibration = False
             self.calibrator.start(now)
+        if self.scene is not None and self.scene.version != self._scene_version:
+            self._scene_version = self.scene.version
+            self.session.set_overrides(self.scene.overrides())
         label, face = self._perceive(now)
         self._last = (label, face)
         ready = self.simulate or self.classifier.fitted
@@ -135,7 +153,8 @@ class App:
         self.hub.publish({
             "bed": self.cfg.bed,
             "time": time.time(),
-            "zones": [{"id": z.id, "label": z.label} for z in self.zones.values()],
+            "zones": [{"id": zid, "label": self.session.zone(zid).label} for zid in self.zones],
+            "scene": None if self.scene is None else self.scene.snapshot(),
             "session": self.session.snapshot(now),
             "calibration": self.calibrator.snapshot(now),
             "calibrated": ready,
@@ -172,6 +191,29 @@ class App:
             time.sleep(max(0.0, period - (time.monotonic() - now)))
 
 
+def _open_scene(model_path: str, zones: dict, needs: dict):
+    """Object detection for scene photos, or None if it cannot be used."""
+    if not os.path.exists(model_path):
+        print("No object detector model; spots keep their typed labels.")
+        return None
+    try:
+        from .detector import SceneDetector
+        from .scene import SceneTracker, SceneWorker
+
+        detector = SceneDetector(model_path)
+    except Exception as exc:
+        print(f"Object detection is off: {exc}")
+        return None
+    wanted = {z.detect for z in zones.values() if z.detect} | set(needs)
+    unknown = sorted(wanted - set(detector.words))
+    if unknown:
+        print("The detector model was not exported with these words, so it can "
+              f"never find them: {', '.join(unknown)}. Re-run tools/export_yoloworld.py.")
+    print("Object detection is on. Send scene photos with: "
+          "python -m readtheroom.scene_sender")
+    return SceneWorker(detector, SceneTracker(zones, needs))
+
+
 def _lan_address() -> str | None:
     """This machine's address on the local network (sends no packets)."""
     try:
@@ -191,6 +233,8 @@ def main() -> None:
     p.add_argument("--frame-file", help="read frames from a JPEG written by a capture process")
     p.add_argument("--model", default=os.path.join(root, "models", "face_landmarker.task"))
     p.add_argument("--zones", default=os.path.join(root, "config", "zones.json"))
+    p.add_argument("--scene-model", default=os.path.join(root, "models", "scene.onnx"),
+                   help="object detector for scene photos; skipped if the file is missing")
     p.add_argument("--data-dir", default=os.path.join(root, "data"))
     p.add_argument("--bed", default="Bed 4")
     p.add_argument("--host", default="0.0.0.0")
@@ -211,8 +255,9 @@ def main() -> None:
         source = FileFrameSource(args.frame_file) if args.frame_file else OpenCVCamera(args.camera)
         sensor = open_sensor()
 
+    scene = _open_scene(args.scene_model, zones, load_needs(args.zones))
     hub = Hub()
-    app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate)
+    app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate, scene)
     serve(hub, app, args.host, args.port)
     print(f"Patient screen: http://localhost:{args.port}/")
     print(f"Nurse station:  http://localhost:{args.port}/nurse")

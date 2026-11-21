@@ -450,3 +450,115 @@ def test_detector_decodes_boxes_back_to_photo_coordinates(tmp_path):
     assert [f["label"] for f in found] == ["bottle", "snack"]
     assert found[0]["box"] == [540.0, 310.0, 740.0, 410.0]
     assert found[1]["box"] == [160.0, 80.0, 240.0, 160.0]
+
+
+# --- scene tracking --------------------------------------------------------
+
+NEEDS = {"cup": {"question": "Want a drink?", "message": "wants a drink"},
+         "book": {"question": "Want to read?", "message": "wants their book"},
+         "water bottle": {"question": "Thirsty?", "message": "is thirsty"}}
+SPOT_A, SPOT_B = [100, 100, 200, 300], [600, 100, 700, 300]
+
+
+def det(label, box, score=0.8):
+    return {"label": label, "score": score, "box": box}
+
+
+@pytest.fixture
+def tracker():
+    from readtheroom.scene import SceneTracker
+    zones = {
+        "water": Zone("water", "water bottle", "Thirsty?", "is thirsty", detect="water bottle"),
+        "snack": Zone("snack", "snack packet", "Hungry?", "is hungry", detect="snack packet"),
+        "pain": Zone("pain", "PAIN card", "In pain?", "is in PAIN", urgent=True),
+    }
+    return SceneTracker(zones, NEEDS)
+
+
+def test_scene_swaps_label_only_after_repeat_sightings(tracker):
+    tracker.update([det("water bottle", SPOT_A), det("snack packet", SPOT_B)])
+    assert tracker.overrides() == {}
+    tracker.update([det("cup", [105, 110, 205, 290]), det("snack packet", SPOT_B)])
+    assert tracker.overrides() == {}  # one photo is not enough
+    tracker.update([det("cup", [105, 110, 205, 290]), det("snack packet", SPOT_B)])
+    swapped = tracker.overrides()
+    assert set(swapped) == {"water"}
+    assert swapped["water"].label == "cup" and swapped["water"].question == "Want a drink?"
+    assert swapped["water"].id == "water"
+    # The bottle comes back.
+    tracker.update([det("water bottle", SPOT_A)])
+    tracker.update([det("water bottle", SPOT_A)])
+    assert tracker.overrides() == {}
+
+
+def test_scene_keeps_label_when_detector_misses_or_flickers(tracker):
+    tracker.update([det("water bottle", SPOT_A)])
+    tracker.update([])                                  # missed entirely
+    tracker.update([det("cup", SPOT_A)])                # one stray sighting
+    tracker.update([det("water bottle", SPOT_A)])
+    tracker.update([det("book", SPOT_A)])
+    tracker.update([det("cup", SPOT_A)])                # two different strays
+    assert tracker.overrides() == {}
+    status = {s["zone"]: s for s in tracker.status()}
+    assert status["water"]["located"] and not status["snack"]["located"]
+    assert "pain" not in status  # no expected object, so never tracked
+
+
+def test_scene_ignores_objects_elsewhere_and_unknown_words(tracker):
+    tracker.update([det("water bottle", SPOT_A)])
+    for _ in range(3):
+        tracker.update([det("cup", SPOT_B), det("sign", SPOT_A),
+                        det("book", [0, 0, 1280, 720])])  # far away, unknown, whole-frame
+    assert tracker.overrides() == {}
+
+
+def test_scene_prefers_current_object_when_both_are_seen(tracker):
+    tracker.update([det("water bottle", SPOT_A)])
+    for _ in range(3):
+        tracker.update([det("cup", SPOT_A, 0.9), det("water bottle", SPOT_A, 0.3)])
+    assert tracker.overrides() == {}
+
+
+def test_scene_reset_forgets_spots(tracker):
+    tracker.update([det("water bottle", SPOT_A)])
+    tracker.reset()
+    assert not any(s["located"] for s in tracker.status())
+
+
+def test_session_asks_about_the_swapped_object(rig):
+    s, clock, alerts = rig
+    feed(s, clock, "water", 1.7)
+    feed(s, clock, NO, 2.5)              # declined: water is on back-off
+    cup = Zone("water", "cup", "Want a drink?", "wants a drink")
+    s.set_overrides({"water": cup})      # a different object: ask again
+    feed(s, clock, "water", 1.7)
+    assert s.state == PROMPT and s.prompt["question"] == "Want a drink?"
+    feed(s, clock, YES, 2.5)
+    assert alerts.list()[0]["message"] == "Bed 4: patient wants a drink"
+    s.set_overrides({})
+    assert s.zone("water").label == "water glass"
+
+
+def test_unchanged_overrides_do_not_lift_back_off(rig):
+    s, clock, _ = rig
+    cup = Zone("water", "cup", "Want a drink?", "wants a drink")
+    s.set_overrides({"water": cup})
+    feed(s, clock, "water", 1.7)
+    feed(s, clock, NO, 2.5)
+    s.set_overrides({"water": cup})      # same again, e.g. the next photo
+    feed(s, clock, "water", 3.0)
+    assert s.state == IDLE
+
+
+def test_needs_table_loads_and_validates(tmp_path):
+    import json
+    from readtheroom.prompts import load_needs
+    root = __import__("os").path.dirname(__import__("os").path.dirname(__file__))
+    path = __import__("os").path.join(root, "config", "zones.json")
+    zones, needs = load_zones(path), load_needs(path)
+    for zone in zones.values():
+        assert zone.detect is None or zone.detect in needs or zone.id == "blanket"
+    bad = tmp_path / "b.json"
+    bad.write_text(json.dumps({"zones": [], "needs": {"cup": {"question": "q"}}}))
+    with pytest.raises(ValueError):
+        load_needs(str(bad))

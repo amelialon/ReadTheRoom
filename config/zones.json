@@ -1,16 +1,76 @@
 {
   "zones": [
-    {"id": "water", "label": "water bottle",
-     "question": "Are you thirsty? Do you need water?",
-     "message": "is thirsty and wants water"},
-    {"id": "snack", "label": "snack packet",
-     "question": "Are you hungry? Do you want a snack?",
-     "message": "is hungry and wants a snack"},
-    {"id": "blanket", "label": "blanket",
-     "question": "Do you want your blanket adjusted?",
-     "message": "wants the blanket adjusted", "climate": true},
-    {"id": "pain", "label": "PAIN card",
-     "question": "Are you in pain?",
-     "message": "is in PAIN", "urgent": true}
-  ]
+    {
+      "id": "water",
+      "label": "water bottle",
+      "question": "Are you thirsty? Do you need water?",
+      "message": "is thirsty and wants water",
+      "detect": "water bottle"
+    },
+    {
+      "id": "snack",
+      "label": "snack packet",
+      "question": "Are you hungry? Do you want a snack?",
+      "message": "is hungry and wants a snack",
+      "detect": "snack packet"
+    },
+    {
+      "id": "blanket",
+      "label": "blanket",
+      "question": "Do you want your blanket adjusted?",
+      "message": "wants the blanket adjusted",
+      "climate": true,
+      "detect": "blanket"
+    },
+    {
+      "id": "pain",
+      "label": "PAIN card",
+      "question": "Are you in pain?",
+      "message": "is in PAIN",
+      "urgent": true
+    }
+  ],
+  "needs": {
+    "water bottle": {
+      "question": "Are you thirsty? Do you need water?",
+      "message": "is thirsty and wants water"
+    },
+    "cup": {
+      "question": "Are you thirsty? Do you want a drink?",
+      "message": "is thirsty and wants a drink"
+    },
+    "snack packet": {
+      "question": "Are you hungry? Do you want a snack?",
+      "message": "is hungry and wants a snack"
+    },
+    "book": {
+      "question": "Do you want to read?",
+      "message": "wants their book"
+    },
+    "remote control": {
+      "question": "Do you want the TV on or changed?",
+      "message": "wants help with the TV"
+    },
+    "phone": {
+      "question": "Do you want your phone?",
+      "message": "wants their phone"
+    },
+    "pillow": {
+      "question": "Do you want your pillow adjusted?",
+      "message": "wants the pillow adjusted"
+    },
+    "tissue box": {
+      "question": "Do you need a tissue?",
+      "message": "needs a tissue"
+    },
+    "pill bottle": {
+      "question": "Do you need your medication?",
+      "message": "is asking about medication",
+      "urgent": true
+    },
+    "fan": {
+      "question": "Do you want the fan changed?",
+      "message": "wants the fan adjusted"
+    }
+  }
 }

@@ -27,6 +27,7 @@ class Session:
         self.state_since = 0.0
         self.prompt: dict | None = None
         self.last_label: str | None = None
+        self._overrides: dict = {}  # zone id -> Zone, when the object there changed
         self._backoff_until: dict = {}
         self._climate_next = 0.0
         self._first_seen: float | None = None
@@ -34,6 +35,17 @@ class Session:
 
     def reset(self, now: float) -> None:
         self._to_idle(now)
+
+    def zone(self, zone_id: str):
+        return self._overrides.get(zone_id, self.zones[zone_id])
+
+    def set_overrides(self, overrides: dict) -> None:
+        """Called when the scene camera finds a different object at a spot.
+        A changed spot is a new question, so any back-off on it is lifted."""
+        for zone_id in set(overrides) | set(self._overrides):
+            if overrides.get(zone_id) != self._overrides.get(zone_id):
+                self._backoff_until.pop(zone_id, None)
+        self._overrides = dict(overrides)
 
     def mark_face(self, now: float, face_present: bool) -> None:
         if self._first_seen is None:
@@ -59,7 +71,7 @@ class Session:
         self.glance.add(now, label if label in self.zones else None)
         zone_id = self.glance.winner(now)
         if zone_id and not self._backed_off(zone_id, now):
-            zone = self.zones[zone_id]
+            zone = self.zone(zone_id)
             question, message = resolve(zone, temp_c, self.cfg)
             if question != zone.question:
                 # Already asking about the room; do not also offer it unprompted.
