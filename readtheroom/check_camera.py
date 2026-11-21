@@ -23,10 +23,22 @@ def list_cameras(limit: int = 4) -> None:
     above 1280x720, while a built-in laptop camera usually can."""
     import cv2
 
+    found = 0
     for index in range(limit):
-        cap = cv2.VideoCapture(index)
-        if not cap.isOpened():
+        # OpenCV prints errors for camera numbers that do not exist; hide them.
+        saved = os.dup(2)
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, 2)
+        try:
+            cap = cv2.VideoCapture(index)
+            opened = cap.isOpened()
+        finally:
+            os.dup2(saved, 2)
+            os.close(saved)
+            os.close(devnull)
+        if not opened:
             continue
+        found += 1
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
         ok, frame = cap.read()
@@ -38,6 +50,8 @@ def list_cameras(limit: int = 4) -> None:
         guess = ("likely the Logitech C270" if width <= 1280
                  else "likely a built-in or other high-resolution camera")
         print(f"--camera {index}: up to {width}x{height}, {guess}")
+    if not found:
+        print("No camera could be opened. Check the cable and camera permission.")
 
 
 def main() -> None:
