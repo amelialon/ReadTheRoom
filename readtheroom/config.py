@@ -57,7 +57,7 @@ class Config:
     # Perception
     blink_threshold: float = 0.75
     ema_alpha: float = 0.4
-    loop_hz: float = 20.0
+    loop_hz: float = 30.0          # the camera's rate; the loop never waits for more
     frame_stale_s: float = 1.0
     preview_s: float = 180.0       # camera view switches itself off after this
     min_fps: float = 5.0           # below this, holds are read unreliably

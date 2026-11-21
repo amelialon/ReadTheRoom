@@ -5,20 +5,47 @@ import os
 
 class OpenCVCamera:
     """Webcam through OpenCV. Works on laptops; QNX says VideoCapture is not
-    its camera path, so on the Pi expect to use FileFrameSource instead."""
+    its camera path, so on the Pi expect to use FileFrameSource instead.
+
+    A background thread keeps only the newest frame. Without it, a camera
+    that produces frames faster than the app takes them builds up a queue,
+    and the device reacts to pictures that are more and more out of date.
+    """
 
     def __init__(self, index: int = 0, width: int = 1280, height: int = 720):
+        import threading
+
         import cv2
 
         self._cap = cv2.VideoCapture(index)
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # ignored by some drivers
         if not self._cap.isOpened():
             raise RuntimeError(f"cannot open camera {index}")
+        self._lock = threading.Lock()
+        self._frame = None
+        self._fresh = False
+        self.dropped = 0  # frames that arrived while the app was busy
+        threading.Thread(target=self._pump, daemon=True).start()
+
+    def _pump(self) -> None:
+        while True:
+            ok, frame = self._cap.read()
+            if not ok:
+                continue
+            with self._lock:
+                if self._fresh:
+                    self.dropped += 1
+                self._frame, self._fresh = frame, True
 
     def read(self):
-        ok, frame = self._cap.read()
-        return frame if ok else None
+        """The newest frame, or None if nothing new arrived since the last call."""
+        with self._lock:
+            if not self._fresh:
+                return None
+            self._fresh = False
+            return self._frame
 
 
 class FileFrameSource:

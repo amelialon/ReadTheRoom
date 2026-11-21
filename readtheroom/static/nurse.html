@@ -57,7 +57,7 @@
   <div id="previewBox" style="display:none">
     <div style="position:relative;display:inline-block;margin-top:10px;line-height:0">
       <img id="preview" alt="Camera view" style="max-width:100%;border-radius:12px">
-      <div id="faceFrame" style="position:absolute;display:none;border:2px solid #7fd6c2;border-radius:28%;box-shadow:0 0 0 1px rgba(0,0,0,.15);transition:all .2s ease-out;pointer-events:none"></div>
+      <div id="faceFrame" style="position:absolute;display:none;border:2px solid #7fd6c2;border-radius:28%;box-shadow:0 0 0 1px rgba(0,0,0,.15);pointer-events:none"></div>
     </div>
     <div id="previewHelp" style="font-size:14px;margin-top:6px"></div>
   </div>
@@ -218,7 +218,11 @@ function render(s) {
 $('calibrate').onclick = () => post('/api/calibrate');
 let previewOn = false;
 $('previewBtn').onclick = () => post('/api/preview', {on: !previewOn});
-setInterval(() => { if (previewOn) $('preview').src = '/preview.jpg?t=' + Date.now(); }, 250);
+// Ask for the next picture only once the last one has arrived, so a slow link never queues up.
+const pv = $('preview');
+function nextPreview() { if (previewOn) pv.src = '/preview.jpg?t=' + Date.now(); else setTimeout(nextPreview, 300); }
+pv.onload = () => setTimeout(nextPreview, 60); pv.onerror = () => setTimeout(nextPreview, 500);
+nextPreview();
 $('relearn').onclick = () => post('/api/scene/reset');
 $('setT').onclick = () => post('/api/debug/temp', {temp_c: parseFloat($('t').value)});
 $('clearT').onclick = () => post('/api/debug/temp', {temp_c: null});

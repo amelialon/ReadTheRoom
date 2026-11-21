@@ -42,8 +42,10 @@ def main() -> None:
     cap = cv2.VideoCapture(args.camera)
     if not cap.isOpened():
         raise SystemExit(f"Cannot open camera {args.camera}")
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    # The detector works on a 640-pixel picture, so a bigger capture only
+    # costs bandwidth, which matters when both cameras share one laptop.
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     print(f"Sending a photo to {args.url} every {args.every:.0f} s. Ctrl+C to stop.")
     try:
         while True:

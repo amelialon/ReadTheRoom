@@ -128,10 +128,10 @@ class App:
         import cv2
 
         h, w = frame.shape[:2]
-        scale = 640 / w
-        img = cv2.resize(frame, (640, round(h * scale)))
+        scale = 480 / w
+        img = cv2.resize(frame, (480, round(h * scale)))
         img = cv2.flip(img, 1)
-        ok, jpeg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        ok, jpeg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 60])
         return jpeg.tobytes() if ok else None
 
     def _face_box(self):
@@ -304,6 +304,7 @@ class App:
                 "humidity": self._humidity,
                 "tick_ms": round((time.monotonic() - started) * 1000, 1),
                 "fps": round(self._fps, 1),
+                "dropped": getattr(self.source, "dropped", None),
                 "too_slow": 0 < self._fps < self.cfg.min_fps,
                 "nurse_screens": self.hub.count("nurse"),
                 "simulate": self.simulate,
