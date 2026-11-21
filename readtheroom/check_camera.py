@@ -2,6 +2,7 @@
 
     python -m readtheroom.check_camera            # webcam 0, four seconds
     python -m readtheroom.check_camera --image photo.jpg
+    python -m readtheroom.check_camera --list     # which number is which camera
 """
 from __future__ import annotations
 
@@ -16,15 +17,43 @@ import numpy as np
 from .features import N_FEATURES, FaceFeatureExtractor
 
 
+def list_cameras(limit: int = 4) -> None:
+    """Camera numbers change when a camera is plugged in, and OpenCV gives no
+    names. Ask each one for a 1920x1080 picture: the Logitech C270 cannot go
+    above 1280x720, while a built-in laptop camera usually can."""
+    import cv2
+
+    for index in range(limit):
+        cap = cv2.VideoCapture(index)
+        if not cap.isOpened():
+            continue
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+        ok, frame = cap.read()
+        cap.release()
+        if not ok:
+            print(f"--camera {index}: opened but gave no picture")
+            continue
+        height, width = frame.shape[:2]
+        guess = ("likely the Logitech C270" if width <= 1280
+                 else "likely a built-in or other high-resolution camera")
+        print(f"--camera {index}: up to {width}x{height}, {guess}")
+
+
 def main() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     p = argparse.ArgumentParser(prog="readtheroom.check_camera")
     p.add_argument("--camera", type=int, default=0)
     p.add_argument("--image", help="check a still photo instead of the webcam")
     p.add_argument("--seconds", type=float, default=4.0)
+    p.add_argument("--list", action="store_true",
+                   help="show the largest picture each camera number offers")
     p.add_argument("--model", default=os.path.join(root, "models", "face_landmarker.task"))
     args = p.parse_args()
 
+    if args.list:
+        list_cameras()
+        return
     extractor = FaceFeatureExtractor(args.model)
     if args.image:
         import cv2
