@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
+import sys
 import time
 
 import numpy as np
@@ -40,6 +42,12 @@ def main() -> None:
 
     from .camera import OpenCVCamera
 
+    if sys.platform == "darwin":
+        listing = subprocess.run(["system_profiler", "SPCameraDataType"],
+                                 capture_output=True, text=True).stdout
+        names = [line.strip().rstrip(":") for line in listing.splitlines()
+                 if line.startswith("    ") and not line.startswith("     ") and line.rstrip().endswith(":")]
+        print("Cameras macOS can see:", ", ".join(names) or "none")
     try:
         camera = OpenCVCamera(args.camera)
     except RuntimeError as exc:

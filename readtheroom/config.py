@@ -30,8 +30,9 @@ class Config:
     climate_reask_s: float = 900.0
 
     # Calibration
-    settle_s: float = 1.5
-    record_s: float = 2.0
+    settle_s: float = 1.2
+    record_s: float = 1.5
+    recheck_warn: float = 0.7      # repeat-check score below this needs attention
 
     # Perception
     blink_threshold: float = 0.75

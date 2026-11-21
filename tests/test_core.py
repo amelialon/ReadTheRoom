@@ -312,6 +312,17 @@ def test_classifier_self_check_flags_overlapping_zones():
     assert check["c"] > 0.9 and check["a"] < 0.8
 
 
+def test_repeat_check_exposes_targets_the_patient_did_not_look_at():
+    # First look: four distinct places. Second look: "water" was really the
+    # screen centre both times it mattered, so it must score badly.
+    rng = np.random.default_rng(3)
+    clf = ZoneClassifier()
+    clf.fit(*blobs(rng, CENTRES))
+    X2, y2 = blobs(rng, {**CENTRES, "water": [3, -3, 0.5]})
+    score = clf.score(X2, y2)
+    assert score["water"] < 0.2 and score["yes"] > 0.9 and score["no"] > 0.9
+
+
 def test_classifier_round_trips_through_disk(tmp_path):
     rng = np.random.default_rng(2)
     clf = ZoneClassifier()
@@ -342,9 +353,11 @@ def test_calibrator_records_only_after_settling():
     while not done:
         t += DT
         done = cal.update(t, np.array([t]))
-        assert t < 10
+        assert t < 20
     assert cal.error is None and not cal.active
     assert set(cal.y) == {"rest", "water"}
+    assert set(cal.passes) == {0, 1} and len(cal.passes) == len(cal.y)
+    assert [cal.y[i] for i, p in enumerate(cal.passes) if p == 1][0] == "rest"
     first_rest = cal.X[0][0]
     assert first_rest >= 1.5
 

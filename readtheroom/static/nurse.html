@@ -120,11 +120,15 @@ function render(s) {
 
   const cal = s.calibration;
   const results = Object.entries(s.self_check).map(([k, v]) => k + ' ' + Math.round(v * 100) + '%');
+  const weak = Object.entries(s.self_check).filter(([k, v]) => v < 0.7).map(([k]) => k);
   $('check').textContent = cal.active ? 'Calibrating: step ' + cal.step + ' of ' + cal.steps
     : cal.error ? cal.error
     : st.simulate ? 'Simulation mode: calibration is not needed.'
     : !s.calibrated ? 'Not calibrated.'
-    : results.length ? 'Calibration self-check: ' + results.join(', ') : 'Calibrated (loaded from last run).';
+    : results.length ? 'Repeat check (second look recognised from the first): ' + results.join(', ')
+        + (weak.length ? '. NOT RELIABLE: ' + weak.join(', ')
+           + '. Move these further from other targets, add light, and calibrate again.' : '')
+    : 'Calibrated (loaded from last run).';
 
   if (st.simulate && !debugBuilt) {
     debugBuilt = true;

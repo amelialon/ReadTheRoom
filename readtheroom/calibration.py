@@ -5,10 +5,14 @@ class Calibrator:
     """Walks the patient through 'look at X' for each target and records features.
 
     Each target gets a settle period (eyes travel there) then a record period.
+    The whole list is shown `passes` times, so the second look at each target
+    can be used to check what was learned from the first.
     """
 
-    def __init__(self, targets, settle_s: float, record_s: float, min_samples: int = 10):
-        self.targets = list(targets)  # [(zone_id, instruction), ...]
+    def __init__(self, targets, settle_s: float, record_s: float,
+                 min_samples: int = 8, passes: int = 2):
+        self.targets = list(targets) * passes  # [(zone_id, instruction), ...]
+        self._per_pass = len(self.targets) // passes
         self.settle_s = settle_s
         self.record_s = record_s
         self.min_samples = min_samples
@@ -16,11 +20,12 @@ class Calibrator:
         self.error: str | None = None
         self.X: list = []
         self.y: list = []
+        self.passes: list = []  # which pass each sample came from
 
     def start(self, now: float) -> None:
         self.active = True
         self.error = None
-        self.X, self.y = [], []
+        self.X, self.y, self.passes = [], [], []
         self._index = 0
         self._target_since = now
         self._count = 0
@@ -47,6 +52,7 @@ class Calibrator:
         if elapsed >= self.settle_s and feature is not None:
             self.X.append(feature)
             self.y.append(zone_id)
+            self.passes.append(self._index // self._per_pass)
             self._count += 1
         return False
 

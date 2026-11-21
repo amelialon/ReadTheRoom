@@ -105,8 +105,15 @@ class App:
         if self.calibrator.error:
             return  # any earlier calibration stays in use
         try:
-            self.classifier.fit(self.calibrator.X, self.calibrator.y)
-            self.self_check = self.classifier.self_check()
+            cal = self.calibrator
+            first = [i for i, p in enumerate(cal.passes) if p == 0]
+            second = [i for i, p in enumerate(cal.passes) if p != 0]
+            # Learn from the first look at each target, test on the second
+            # look, then keep everything.
+            self.classifier.fit([cal.X[i] for i in first], [cal.y[i] for i in first])
+            self.self_check = self.classifier.score([cal.X[i] for i in second],
+                                                    [cal.y[i] for i in second])
+            self.classifier.fit(cal.X, cal.y)
             self.classifier.save(self._calibration_path)
         except (ValueError, OSError) as exc:
             self.calibrator.error = f"Calibration failed: {exc}"

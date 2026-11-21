@@ -82,6 +82,15 @@ class ZoneClassifier:
             hits[label] += self._vote(d[i]) == label
         return {label: round(hits[label] / totals[label], 3) for label in totals}
 
+    def score(self, X, y) -> dict:
+        """Share of the given samples recognised as their own zone, per zone."""
+        hits: Counter = Counter()
+        totals: Counter = Counter()
+        for x, label in zip(X, y):
+            totals[label] += 1
+            hits[label] += self.predict(x) == label
+        return {label: round(hits[label] / totals[label], 3) for label in totals}
+
     def save(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"k": self._k, "threshold": self._threshold,
