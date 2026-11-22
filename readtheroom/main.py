@@ -87,8 +87,8 @@ class App:
             self._feature = None
             self._q_state = None
             self._q_centred = False
-            self.calibrator = Calibrator([(REST, "Look at the screen")],
-                                         cfg.teach_settle_s, cfg.teach_record_s, passes=1)
+            self.calibrator = Calibrator([(REST, "Look at the screen")], cfg.teach_settle_s,
+                                         cfg.teach_record_s, cfg.teach_min_samples, passes=1)
         self._want_calibration = False
         self._debug_gaze: str | None = REST
         self._temp: float | None = None
@@ -470,7 +470,7 @@ class App:
             self._want_calibration = False
             if self.table_mode:
                 self.calibrator = Calibrator(self._table_targets(), self.cfg.teach_settle_s,
-                                             self.cfg.teach_record_s, passes=1)
+                                             self.cfg.teach_record_s, self.cfg.teach_min_samples, passes=1)
                 self._teaching = "all"
             self.calibrator.start(now)
         if self.table_mode:
@@ -494,7 +494,7 @@ class App:
                 label = next((t["label"] for t in self.table.targets if t["id"] == target), target)
                 what = "the screen" if target == REST else "the " + label
                 self.calibrator = Calibrator([(target, f"Look at {what}")], self.cfg.teach_settle_s,
-                                             self.cfg.teach_record_s, passes=1)
+                                             self.cfg.teach_record_s, self.cfg.teach_min_samples, passes=1)
                 self._teaching = target
                 self.calibrator.start(now)
         if self.scene is not None and self.scene.version != self._scene_version:

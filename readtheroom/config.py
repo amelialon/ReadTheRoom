@@ -63,8 +63,11 @@ class Config:
     ray_margin_deg: float = 2.0     # and this much closer than the runner-up
     table_glance_s: float = 2.2     # a hold this long asks about an object; a passing glance does not
     ray_screen_deg: float = 14.0    # this close to the screen line counts as "on the screen"
-    teach_settle_s: float = 0.8
-    teach_record_s: float = 1.6
+    # One look while calibrating: half a second for the eyes to get there,
+    # one second recorded. A second and a half a look, nine seconds for six.
+    teach_settle_s: float = 0.5
+    teach_record_s: float = 1.0
+    teach_min_samples: int = 6      # readable frames a look needs (12 Hz on the Pi gives about 12)
     greet_settle_s: float = 0.8
     greet_record_s: float = 1.7
     greet_retry_s: float = 5.0

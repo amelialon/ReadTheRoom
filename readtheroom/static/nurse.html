@@ -250,6 +250,9 @@
   input[type=number] { font: inherit; padding: 9px 12px; width: 96px; border-radius: 999px; border: 0; background: var(--plate); box-shadow: 0 0 0 1px var(--edge); }
   #gaze { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill.small { padding: 8px 14px; font-size: 13px; }
+  .pill.busy { background: var(--blush); color: var(--ink); cursor: default; }
+  .pill:disabled { opacity: .7; transform: none; }
+  #calibrateMain { flex: none; }
   a { color: var(--ink-2); }
 
   @media (max-width: 900px) {
@@ -328,6 +331,7 @@
           </div>
         </div>
         <div id="camBar">
+          <button class="pill small staff-only" id="calibrateMain">Calibrate</button>
           <span id="camTip">Tap the small picture to swap</span>
           <div class="quiet" id="camHelp"></div>
         </div>
@@ -738,7 +742,12 @@ function render(s) {
   /* Device sheet. */
   if (s.table) renderTableSheet(s);
   $('tableCol').style.display = s.table ? '' : 'none';
-  $('calibrate').firstChild.textContent = (s.table ? 'Calibrate (' + s.table.steps + ' looks)' : st.gaze_mode === 'quick' ? 'Re-centre' : 'Start calibration') + ' ';
+  const calLabel = cal.active ? 'Calibrating ' + cal.step + ' of ' + cal.steps
+    : s.table ? 'Calibrate (' + s.table.steps + ' looks)' : st.gaze_mode === 'quick' ? 'Re-centre' : 'Start calibration';
+  $('calibrate').firstChild.textContent = calLabel + ' ';
+  $('calibrateMain').textContent = calLabel;
+  $('calibrateMain').disabled = cal.active || !!st.simulate;
+  $('calibrateMain').className = 'pill small staff-only' + (cal.active ? ' busy' : s.table && !s.calibrated ? '' : ' soft');
   const results = Object.entries(s.self_check).map(([k, v]) => k + ' ' + Math.round(v * 100) + '%');
   const weak = Object.entries(s.self_check).filter(([k, v]) => v < 0.7).map(([k]) => k);
   const calText = cal.active ? 'Calibrating' : s.calibrated ? 'Ready' : 'Not ready';
@@ -746,7 +755,7 @@ function render(s) {
   chip('calState', calText, s.calibrated && !cal.active ? 'good' : '');
   $('check').textContent = cal.active ? 'Calibrating: step ' + cal.step + ' of ' + cal.steps
     : cal.error ? cal.error
-    : s.table ? (st.simulate ? 'Simulation: press a spot below to stand in for a look.' : s.calibrated ? 'Calibrated. Do it again at the start of every session, or when the laptop or the patient has moved.' : 'Not calibrated. Press Calibrate: the patient looks at the screen centre, YES, NO, then each object, two seconds each.')
+    : s.table ? (st.simulate ? 'Simulation: press a spot below to stand in for a look.' : s.calibrated ? 'Calibrated. Do it again at the start of every session, or when the laptop or the patient has moved.' : 'Not calibrated. Press Calibrate under the room view: the patient looks at the screen centre, YES, NO, then each object, a second and a half each.')
     : st.simulate ? 'Simulation mode: calibration is not needed.'
     : st.gaze_mode === 'quick' ? (s.calibrated ? 'The device learned the centre from one look at the screen and keeps it up to date.' : 'Waiting for the patient to look at the screen.')
     : !s.calibrated ? 'Not calibrated.'
@@ -822,6 +831,7 @@ function render(s) {
 }
 
 $('calibrate').onclick = () => post('/api/calibrate');
+$('calibrateMain').onclick = () => post('/api/calibrate');
 
 /* Table sheet: the photo, the spots on it, and teaching each look. */
 function renderTableSheet(s) {
@@ -838,7 +848,7 @@ function renderTableSheet(s) {
   $('tableTag').className = 'tag ' + (tb.ready ? 'good' : '');
   $('tableNote').textContent = !tb.photo_id ? (tb.camera ? 'Waiting for the table camera\u2019s first picture.' : 'Photograph the table from where the patient sits, with the screen in the picture.')
     : !tb.targets.length ? (tb.found.length ? 'Check the spots the detector found, then save.' : (tb.detect_error ? 'The detector cannot run on this device. ' : 'Nothing recognised. ') + 'Add spots with "Add a spot" and a tap on the photo, the screen first.')
-    : 'Ticked spots are in this session (the ' + tb.max_active + ' furthest apart are ticked by themselves; fewer, further apart, reads best). Press Calibrate under Patient camera.';
+    : 'Ticked spots are in this session (the ' + tb.max_active + ' furthest apart are ticked by themselves; fewer, further apart, reads best). Then press Calibrate under the room view.';
   $('snapBtn').style.display = st.simulate ? 'none' : '';
   $('snapBtn').textContent = tb.camera ? (tb.photo_id ? 'Photograph the table again' : 'Photograph the table') : 'Use the patient camera';
   draft.forEach((t, i) => {
