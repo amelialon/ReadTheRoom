@@ -35,7 +35,14 @@ if ! procs | grep -q "qnx/capture -u 5"; then
     > logs/capture.log 2>&1 < /dev/null &
 fi
 
+# The temperature log, if it is not already running.
+if ! procs | grep -q "heartbeat.sh"; then
+  nohup sh heartbeat.sh > /dev/null 2>&1 < /dev/null &
+fi
+
+# 12 reads a second: the gaze frames arrive at about that rate anyway, and
+# the board stays cooler than at 30. Reboots seen here at 85 degrees.
 nohup python3 -m readtheroom.supervisor --port 8080 --startup 90 -- \
-  --frame-file /tmp/gaze.jpg --table-file /tmp/scene.jpg \
+  --frame-file /tmp/gaze.jpg --table-file /tmp/scene.jpg --loop-hz 12 \
   > logs/app.log 2>&1 < /dev/null &
 echo "started table mode; log: logs/app.log"

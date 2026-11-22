@@ -666,6 +666,8 @@ def main() -> None:
     p.add_argument("--answer-mode", choices=ANSWER_MODES, default="horizontal",
                    help="vertical: YES is look up, NO is look down, for patients "
                         "who can only move their eyes up and down")
+    p.add_argument("--loop-hz", type=float, help="how many times a second to read the camera "
+                   "(default 30; 10 to 15 is plenty and keeps a small board cool)")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8000)
     args = p.parse_args()
@@ -675,6 +677,8 @@ def main() -> None:
         print("Up/down answers need the guided routine; using --gaze-mode trained.")
         gaze_mode = "trained"
     cfg = Config(bed=args.bed, answer_mode=args.answer_mode, gaze_mode=gaze_mode)
+    if args.loop_hz:
+        cfg.loop_hz = max(5.0, args.loop_hz)
     zones = load_zones(args.zones)
     source = extractor = sensor = table_source = None
     if not args.simulate:
