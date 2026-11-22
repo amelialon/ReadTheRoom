@@ -145,7 +145,7 @@ function render(s) {
     count = 'Setting up';
     headline = cal.instruction;
     sub = cal.recording ? 'Keep looking' : 'Get ready';
-    const el = {yes: 'yes', no: 'no', rest: 'centre'}[cal.target];
+    const el = {yes: 'yes', no: 'no', rest: 'centre', left: 'yes', right: 'no'}[cal.target];
     if (el) $(el).classList.add('target');
     $('bar').style.visibility = 'visible';
     $('bar').firstElementChild.style.width = (cal.progress * 100) + '%';

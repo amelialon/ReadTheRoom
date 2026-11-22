@@ -13,7 +13,11 @@
   "pillow",
   "tissue box",
   "pill bottle",
-  "fan"
+  "fan",
+  "pen"
  ],
- "size": 640
+ "size": [
+  480,
+  640
+ ]
 }

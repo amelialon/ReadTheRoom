@@ -62,6 +62,10 @@ class App:
             self._needs = needs or {}
             self.calibrator = Calibrator([(REST, "Hello. Look here for a moment.")],
                                          cfg.greet_settle_s, cfg.greet_record_s, passes=1)
+            # Staff calibration also takes a look each way, to balance the sides.
+            self._staff_calibration = Calibrator(
+                [(REST, "Look at the centre of the screen"), (LEFT, "Look at the YES circle on the left"),
+                 (RIGHT, "Look at the NO circle on the right")], cfg.greet_settle_s, cfg.greet_record_s, passes=1)
             self._greet_after = 0.0
             self._q_state = None
             self._q_centred = False
@@ -432,7 +436,10 @@ class App:
             if self.calibrator.error:
                 self._greet_after = now + self.cfg.greet_retry_s  # try again shortly
             else:
-                self.reader.set_centre(self.calibrator.X)
+                cal = self.calibrator
+                looks = {k: [x for x, y in zip(cal.X, cal.y) if y == k] for k in (REST, LEFT, RIGHT)}
+                self.reader.set_centre(looks[REST])
+                self.reader.set_sides(looks[LEFT], looks[RIGHT])
                 self._q_state = None
             return
         if self.calibrator.error:
@@ -455,6 +462,8 @@ class App:
         started = time.monotonic()
         if self._want_calibration:
             self._want_calibration = False
+            if self.quick:
+                self.calibrator = self._staff_calibration
             self.calibrator.start(now)
         if self.table_mode:
             if self._table_dirty:
