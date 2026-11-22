@@ -48,6 +48,17 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "spot"
 
 
+def overlap(a: list, b: list) -> float:
+    """Share of the two boxes' union that both cover (intersection over union)."""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    inter = w * h
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
 def spread_out(items: list, keep: int) -> set:
     """Indices of the `keep` items whose closest pair is furthest apart.
     Items are (x, y); a bird's-eye photo makes photo distance a fair stand-in
@@ -102,10 +113,18 @@ class Table:
 
     def suggestions(self) -> list:
         """Targets the detector proposes: every known need it saw, plus the
-        screen. The nurse confirms or edits them on the caregiver page."""
+        screen. The nurse confirms or edits them on the caregiver page.
+
+        One object, one spot: the detector often reports the same thing
+        under two names (a bottle that is also a "cup"), and two spots on
+        one object can never be told apart by a look. The better-scoring
+        name keeps the box; anything mostly inside a box already taken is
+        dropped."""
         out, used = [], set()
         for d in sorted(self.found, key=lambda d: -d["score"]):
             label = d["label"]
+            if any(overlap(d["box"], o["box"]) > 0.5 for o in out):
+                continue
             if label in SCREEN_WORDS and REST not in used:
                 out.append({"id": REST, "label": "screen", "box": d["box"]})
                 used.add(REST)

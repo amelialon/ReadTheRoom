@@ -323,3 +323,23 @@ def test_a_look_at_the_wrong_object_is_flagged(table_app):
     assert not app.calibrator.active and app.calibrator.error is None
     assert "t:water-bottle" not in app.doubts
     assert "t:snack-packet" not in app.doubts or np.allclose(app.ray.points["t:water-bottle"], BOTTLE, atol=1.0)
+
+
+def test_one_object_becomes_one_spot(tmp_path):
+    """The detector called the same bottle both "water bottle" and "cup"
+    (two boxes almost on top of each other, as on the Pi on Nov 22). Two
+    spots on one object can never be told apart, so only the better
+    name is suggested. A cup genuinely elsewhere still is."""
+    from readtheroom.table import overlap
+    assert overlap([0, 0, 10, 10], [0, 0, 10, 10]) == 1.0
+    assert overlap([0, 0, 10, 10], [20, 20, 30, 30]) == 0.0
+    table = Table(str(tmp_path / "table"), load_needs(ZONES))
+    table.set_photo(TINY_JPEG)
+    table.found = [{"label": "water bottle", "score": 0.47, "box": [1.1, 0.3, 1.4, 1.0]},
+                   {"label": "cup", "score": 0.31, "box": [1.1, 0.31, 1.39, 0.99]},
+                   {"label": "cup", "score": 0.3, "box": [0.1, 0.1, 0.4, 0.5]},
+                   {"label": "laptop", "score": 0.6, "box": [0.5, 1.2, 1.5, 2.0]}]
+    got = [(s["label"], s["box"]) for s in table.suggestions()]
+    assert got == [("screen", [0.5, 1.2, 1.5, 2.0]),
+                   ("water bottle", [1.1, 0.3, 1.4, 1.0]),
+                   ("cup", [0.1, 0.1, 0.4, 0.5])]
