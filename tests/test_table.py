@@ -343,3 +343,26 @@ def test_one_object_becomes_one_spot(tmp_path):
     assert got == [("screen", [0.5, 1.2, 1.5, 2.0]),
                    ("water bottle", [1.1, 0.3, 1.4, 1.0]),
                    ("cup", [0.1, 0.1, 0.4, 0.5])]
+
+
+def test_screen_yes_and_no_survive_a_restart(table_app, tmp_path):
+    """Calibrate with the screen not marked as a spot on the photo, restart
+    the app from the same data directory: every look is still there and
+    the device is ready without calibrating again. Forgetting one spot
+    leaves the others alone."""
+    from readtheroom.main import App
+    from readtheroom.server import Hub
+    app, run = table_app
+    app.set_table_photo(TINY_JPEG)
+    app.set_table_targets([{"need": "water bottle", "box": [0, 0, 1, 1]},
+                           {"need": "snack packet", "box": [1, 0, 2, 1]}])
+    calibrate(app, run, {REST: SCREEN, "yes": YES_SPOT, "no": NO_SPOT,
+                         "t:water-bottle": BOTTLE, "t:snack-packet": SNACK})
+    assert set(app.ray.points) == {REST, "yes", "no", "t:water-bottle", "t:snack-packet"}
+    again = App(Config(ema_alpha=1.0, gaze_mode="table"), load_zones(ZONES), str(tmp_path), Hub(),
+                _FakeCamera(), _FakeExtractor(), menu=load_menu(ZONES), needs=load_needs(ZONES))
+    assert set(again.ray.points) == {REST, "yes", "no", "t:water-bottle", "t:snack-packet"}
+    again.tick(0.1)
+    assert again.hub._state["calibrated"] is True
+    assert again.forget_target("t:snack-packet")
+    assert set(again.ray.points) == {REST, "yes", "no", "t:water-bottle"}

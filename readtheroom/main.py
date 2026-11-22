@@ -196,7 +196,10 @@ class App:
         photo yet, the zones file stands in."""
         zones = self.table.zones() if self.table.photo else self.zones
         self.session.set_zones(zones)
-        keep = {t["id"] for t in self.table.targets}
+        # The screen, YES and NO are looks too, but never spots on the photo:
+        # they stay. (Until Nov 22 they were dropped here at every start-up,
+        # so the device came up "not ready" after each power cycle.)
+        keep = {t["id"] for t in self.table.targets} | {REST, YES, NO}
         for target in list(self.ray.points):
             if target not in keep:
                 self.ray.forget(target)
