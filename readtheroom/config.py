@@ -63,9 +63,10 @@ class Config:
     ray_margin_deg: float = 2.0     # and this much closer than the runner-up
     table_glance_s: float = 2.2     # a hold this long asks about an object; a passing glance does not
     ray_screen_deg: float = 14.0    # this close to the screen line counts as "on the screen"
-    # One look while calibrating: 0.7 s for the eyes to get there, 1.3 s
-    # recorded. Two seconds a look, twelve for six; 1.5 s felt rushed, 2.4 tiring.
-    teach_settle_s: float = 0.7
+    # One look while calibrating: a full second for the eyes to get there,
+    # then 1.3 s recorded. 2.3 s a look, about fourteen for six. Felt rushed
+    # at 1.5 and 2.0; the settle is what makes it feel unhurried.
+    teach_settle_s: float = 1.0
     teach_record_s: float = 1.3
     teach_min_samples: int = 6      # readable frames a look needs (12 Hz on the Pi gives about 12)
     greet_settle_s: float = 0.8
