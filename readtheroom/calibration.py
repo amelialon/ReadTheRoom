@@ -10,11 +10,11 @@ def control_targets(answer_mode: str = "horizontal") -> list:
         raise ValueError(f"answer mode must be one of {', '.join(ANSWER_MODES)}")
     if answer_mode == "vertical":
         return [(REST, "Look at the centre of the screen"),
-                (YES, "Look at YES at the top"),
-                (NO, "Look at NO at the bottom")]
+                (YES, "Look at the YES circle at the top"),
+                (NO, "Look at the NO circle at the bottom")]
     return [(REST, "Look at the centre of the screen"),
-            (YES, "Look at YES on the left"),
-            (NO, "Look at NO on the right")]
+            (YES, "Look at the YES circle on the left"),
+            (NO, "Look at the NO circle on the right")]
 
 
 class Calibrator:
