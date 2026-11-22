@@ -11,17 +11,27 @@
   html, body { height: 100%; }
   body { overflow: hidden; position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-  /* Two halves. The half being held tints from the bottom up; the labels sit in the far corners. */
-  .side { position: relative; overflow: hidden; background: var(--ground); }
-  .side .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--accent-light);
-                transition: height 100ms linear; }  /* a measurement of time, so it moves evenly */
-  .side .label { position: absolute; bottom: 10vh; font-size: 10.4vw; font-weight: 700; letter-spacing: -.06em;
-                 line-height: .9; color: var(--ink-3); transition: color 300ms var(--ease), font-size 300ms var(--ease); }
-  #yes .label { left: 4.6vw; } #no .label { right: 4.6vw; }
+  /* Two halves. Each answer is one circle in the open part of that half, not a word filling the column. */
+  .side { position: relative; overflow: hidden; background: var(--ground); --p: 0; }
+  .mark { position: absolute; top: 50%; width: min(18vw, 210px); height: min(18vw, 210px);
+          border-radius: 50%; background: var(--plate); box-shadow: var(--highlight), var(--shadow);
+          display: grid; place-items: center; overflow: hidden; }
+  #yes .mark { left: 3.2vw; transform: translateY(-50%); }
+  #no .mark { right: 3.2vw; transform: translateY(-50%); }
+  .mark .fill { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 100%);
+                background: var(--accent-light); transition: height 100ms linear; }
+  .side .label { position: relative; z-index: 1; font-size: clamp(28px, 3.4vw, 56px); font-weight: 700;
+                 letter-spacing: -.05em; line-height: 1; color: var(--ink-3);
+                 transition: color 300ms var(--ease), font-size 300ms var(--ease); }
   body.prompt .label, body.menu .label { color: var(--ink); }
-  body.more #no .label, body.menu #no .label { font-size: 7vw; color: var(--ink-2); }
-  .side.target::after, main.target .core::after { content: ""; position: absolute; inset: 0; border: 4px solid var(--accent);
-                                                  border-radius: inherit; pointer-events: none; }
+  body.more #no .label, body.menu #no .label { font-size: clamp(18px, 2vw, 32px); color: var(--ink-2); }
+  .side.target .mark { box-shadow: var(--highlight), 0 0 0 4px var(--accent); }
+  main.target .core::after { content: ""; position: absolute; inset: 0; border: 4px solid var(--accent);
+                             border-radius: inherit; pointer-events: none; }
+  body.slots .mark { visibility: hidden; }
+  body.slots .side::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+                             height: calc(var(--p) * 100%); background: var(--accent-light);
+                             transition: height 100ms linear; }
 
   /* The sheet across the seam. */
   main { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -56%); width: min(50vw, 760px); }
@@ -65,16 +75,19 @@
 
   /* Up/down answers: YES is the top half, NO the bottom half. */
   body.vertical { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); }
-  body.vertical .side .fill { top: 0; right: auto; width: 0; height: 100% !important; transition: width 100ms linear; }
-  body.vertical .side .label { bottom: auto; top: 50%; transform: translateY(-50%); font-size: 12vh; }
-  body.vertical #yes .label { left: 4vw; } body.vertical #no .label { right: 4vw; left: auto; }
+  body.vertical #yes .mark, body.vertical #no .mark {
+    left: 50%; right: auto; width: min(20vh, 190px); height: min(20vh, 190px); transform: translateX(-50%); }
+  body.vertical #yes .mark { top: 3vh; bottom: auto; }
+  body.vertical #no .mark { top: auto; bottom: 11vh; }
+  body.vertical .mark .fill { top: 0; bottom: 0; right: auto; width: calc(var(--p) * 100%); height: 100%;
+                              transition: width 100ms linear; }
   body.vertical main { transform: translate(-50%, -50%); }
   body.vertical #island { bottom: 2vh; }
 </style>
 </head>
 <body>
-<div class="side" id="yes"><div class="fill"></div><span class="label">YES</span></div>
-<div class="side" id="no"><div class="fill"></div><span class="label">NO</span></div>
+<div class="side" id="yes"><div class="mark"><div class="fill"></div><span class="label">YES</span></div></div>
+<div class="side" id="no"><div class="mark"><div class="fill"></div><span class="label">NO</span></div></div>
 <main id="centre">
   <div class="shell"><div class="core">
     <span id="count" class="tag"></span>
@@ -102,9 +115,7 @@ function chime(freq) {
 }
 let vertical = false;
 function fill(id, v) {
-  const f = $(id).querySelector('.fill');
-  f.style.height = vertical ? '' : (v * 100) + '%';
-  f.style.width = vertical ? (v * 100) + '%' : '';
+  $(id).style.setProperty('--p', String(v));
 }
 function mode(name) {
   document.body.className = (vertical ? 'vertical ' : '') + name
@@ -121,7 +132,6 @@ function setHeadline(text) {
 function render(s) {
   const ses = s.session, cal = s.calibration, st = s.status;
   vertical = st.answer_mode === 'vertical';
-  const yesWay = vertical ? 'up' : 'left', noWay = vertical ? 'down' : 'right';
   document.body.classList.toggle('noface', !st.face_ok);
   mode('');
   ['yes', 'no', 'centre'].forEach(id => $(id).classList.remove('target'));
@@ -135,7 +145,7 @@ function render(s) {
     count = 'Setting up';
     headline = cal.instruction;
     sub = cal.recording ? 'Keep looking' : 'Get ready';
-    const el = {yes: 'yes', no: 'no', rest: 'centre'}[cal.target];
+    const el = {yes: 'yes', no: 'no', rest: 'centre', left: 'yes', right: 'no'}[cal.target];
     if (el) $(el).classList.add('target');
     $('bar').style.visibility = 'visible';
     $('bar').firstElementChild.style.width = (cal.progress * 100) + '%';
@@ -149,7 +159,7 @@ function render(s) {
     mode('prompt');
     count = 'Question';
     headline = ses.question;
-    sub = 'Look ' + yesWay + ' for yes, ' + noWay + ' for no, and hold.';
+    sub = 'Look at the YES circle and hold. Look at the NO circle and hold to say no.';
     if (ses.leader === 'yes') fill('yes', ses.progress);
     if (ses.leader === 'no') fill('no', ses.progress);
   } else if (ses.state === 'menu') {
@@ -157,8 +167,8 @@ function render(s) {
     noText = ses.menu.index + 1 < ses.menu.count ? 'NEXT' : 'CLOSE';
     count = 'Do you need this  ' + (ses.menu.index + 1) + ' of ' + ses.menu.count;
     headline = ses.menu.label;
-    sub = 'Look ' + yesWay + ' and hold for yes. Your nurse is told straight away. '
-      + 'Look ' + noWay + ' and hold for ' + noText.toLowerCase() + '.';
+    sub = 'Look at the YES circle and hold. Your nurse is told straight away. '
+      + 'Look at the ' + noText + ' circle and hold for ' + noText.toLowerCase() + '.';
     if (ses.leader === 'yes') fill('yes', ses.progress);
     if (ses.leader === 'no') fill('no', ses.progress);
   } else if (ses.state === 'sent') {
@@ -181,7 +191,7 @@ function render(s) {
     } else if (ses.more) {
       mode('more');
       noText = 'MORE';
-      sub = 'For pain, moving, the toilet or anything else: look ' + noWay + ' at MORE and keep looking.';
+      sub = 'For pain, moving, the toilet or anything else: look at the MORE circle and keep looking.';
       fill('no', ses.more_progress);
     }
     const zone = quick ? null : s.zones.find(z => z.id === ses.leader);

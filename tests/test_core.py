@@ -740,7 +740,7 @@ def test_quick_mode_staff_calibration_balances_left_and_right(quick_app):
     assert app.session.state == IDLE                  # too small a glance to count yet
     app.request_calibration()                         # staff press "Start calibration"
     run(centre, 2.6)
-    assert app.calibrator.snapshot(0)["instruction"] == "Look to your left"
+    assert app.calibrator.snapshot(0)["instruction"] == "Look at the YES circle on the left"
     run(_look(out_l=0.3), 2.5)
     run(_look(in_l=0.5), 2.5)                         # right glances read stronger
     assert not app.calibrator.active and app.calibrator.error is None

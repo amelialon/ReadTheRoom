@@ -392,15 +392,15 @@ def test_opening_hold_is_clearly_longer_than_an_answer():
 def test_default_answers_are_left_and_right():
     assert Config().answer_mode == "horizontal"
     targets = dict(control_targets())
-    assert targets[YES] == "Look at YES on the left"
-    assert targets[NO] == "Look at NO on the right"
+    assert targets[YES] == "Look at the YES circle on the left"
+    assert targets[NO] == "Look at the NO circle on the right"
 
 
 def test_vertical_mode_changes_only_the_instructions():
     targets = control_targets("vertical")
     assert [t[0] for t in targets] == [REST, YES, NO]
-    assert dict(targets)[YES] == "Look at YES at the top"
-    assert dict(targets)[NO] == "Look at NO at the bottom"
+    assert dict(targets)[YES] == "Look at the YES circle at the top"
+    assert dict(targets)[NO] == "Look at the NO circle at the bottom"
     with pytest.raises(ValueError):
         control_targets("diagonal")
 
@@ -414,7 +414,7 @@ def test_app_uses_the_answer_mode(tmp_path):
     app = App(Config(answer_mode="vertical"), zones, str(tmp_path), hub,
               simulate=True, menu=MENU_ITEMS)
     instructions = [text for _, text in app.calibrator.targets]
-    assert "Look at YES at the top" in instructions
+    assert "Look at the YES circle at the top" in instructions
     assert "Look at the water glass" in instructions
     assert app._calibration_path.endswith("calibration-vertical.json")
     app.tick(100.0)
@@ -424,4 +424,4 @@ def test_app_uses_the_answer_mode(tmp_path):
 
     flat = App(Config(gaze_mode="trained"), zones, str(tmp_path), Hub(), simulate=True)
     assert flat._calibration_path.endswith("calibration.json")
-    assert "Look at YES on the left" in [text for _, text in flat.calibrator.targets]
+    assert "Look at the YES circle on the left" in [text for _, text in flat.calibrator.targets]

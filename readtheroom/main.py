@@ -62,8 +62,8 @@ class App:
                                          cfg.greet_settle_s, cfg.greet_record_s, passes=1)
             # Staff calibration also takes a look each way, to balance the sides.
             self._staff_calibration = Calibrator(
-                [(REST, "Look at the centre of the screen"), (LEFT, "Look to your left"),
-                 (RIGHT, "Look to your right")], cfg.greet_settle_s, cfg.greet_record_s, passes=1)
+                [(REST, "Look at the centre of the screen"), (LEFT, "Look at the YES circle on the left"),
+                 (RIGHT, "Look at the NO circle on the right")], cfg.greet_settle_s, cfg.greet_record_s, passes=1)
             self._greet_after = 0.0
             self._q_state = None
             self._q_centred = False
