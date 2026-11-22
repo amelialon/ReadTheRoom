@@ -632,25 +632,43 @@ function renderAlerts(s) {
   $('reqCount').textContent = open ? open + ' waiting' : '';
 }
 
+const bedCards = new Map();
+$('beds').onclick = e => { const c = e.target.closest('.bedcard'); if (c) go('bed', c.dataset.bed); };
 function renderWard(s) {
-  const st = s.status, open = s.alerts.filter(a => a.state !== 'acked');
-  const urgent = open.some(a => a.state === 'escalated');
-  $('beds').replaceChildren(...beds.map(b => {
-    const card = document.createElement('button');
-    card.className = 'bedcard glass' + (b.id === 'live' ? '' : ' empty');
-    card.onclick = () => go('bed', b.id);
-    const name = document.createElement('div'); name.className = 'name'; name.textContent = bedLabel(b);
-    const line = document.createElement('div'); line.className = 'line';
-    const foot = document.createElement('div'); foot.className = 'foot';
-    if (b.id === 'live') {
-      line.textContent = !online ? 'Device offline' : st.face_ok ? 'Patient in view' : 'Patient not in view';
-      if (open.length) { const c = document.createElement('span'); c.className = 'count' + (urgent ? ' urgent' : '');
-        c.textContent = open.length + (open.length === 1 ? ' request' : ' requests') + (urgent ? ', one urgent' : ''); foot.appendChild(c); }
-      if (st && st.temp_c != null) { const t = document.createElement('span'); t.className = 'quiet'; t.textContent = st.temp_c.toFixed(1) + ' °C'; foot.appendChild(t); }
-    } else line.textContent = 'No device paired';
-    card.append(name, line, foot);
-    return card;
-  }));
+  // The cards stay put and update in place: the state arrives many times a
+  // second, and a card replaced between a finger's press and release never
+  // gets its tap.
+  const st = s.status || {}, open = s.alerts.filter(a => a.state !== 'acked');
+  const ids = new Set(beds.map(b => b.id));
+  for (const [id, el] of bedCards) if (!ids.has(id)) { el.remove(); bedCards.delete(id); }
+  beds.forEach((b, i) => {
+    let card = bedCards.get(b.id);
+    if (!card) {
+      card = document.createElement('button'); card.dataset.bed = b.id;
+      const name = document.createElement('div'); name.className = 'name';
+      const line = document.createElement('div'); line.className = 'line';
+      const foot = document.createElement('div'); foot.className = 'foot';
+      const count = document.createElement('span'); count.className = 'count';
+      const temp = document.createElement('span'); temp.className = 'quiet';
+      foot.append(count, temp); card.append(name, line, foot);
+      bedCards.set(b.id, card);
+    }
+    if ($('beds').children[i] !== card) $('beds').insertBefore(card, $('beds').children[i] || null);
+    const paired = b.id === 'live' || !!b.device;
+    card.className = 'bedcard glass' + (paired ? '' : ' empty');
+    card.querySelector('.name').textContent = bedLabel(b);
+    const mine = b.device ? open.filter(a => a.device_id === b.id) : open;
+    const urgent = mine.some(a => a.state === 'escalated');
+    card.querySelector('.line').textContent = b.id === 'live' ? (!online ? 'Device offline' : st.face_ok ? 'Patient in view' : 'Patient not in view')
+      : b.device ? (b.patient ? b.patient + ' \u00b7 ' : '') + (b.online ? 'Device online' : 'Device offline') : 'No device paired';
+    const count = card.querySelector('.count');
+    count.style.display = paired && mine.length ? '' : 'none';
+    count.className = 'count' + (urgent ? ' urgent' : '');
+    count.textContent = mine.length + (mine.length === 1 ? ' request' : ' requests') + (urgent ? ', one urgent' : '');
+    const temp = b.id === 'live' ? st.temp_c : b.temp, tempEl = card.querySelector('.quiet');
+    tempEl.style.display = paired && temp != null ? '' : 'none';
+    tempEl.textContent = temp != null ? temp.toFixed(1) + ' °C' : '';
+  });
 }
 
 function renderAnalytics(s) {
