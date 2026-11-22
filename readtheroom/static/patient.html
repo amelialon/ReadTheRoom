@@ -144,7 +144,7 @@ function render(s) {
   if (cal.active) {
     count = 'Setting up';
     headline = cal.instruction;
-    sub = cal.recording ? 'Keep looking' : 'Get ready';
+    sub = cal.recording ? 'Keep looking' : 'Find it and hold your eyes there';
     const el = {yes: 'yes', no: 'no', rest: 'centre'}[cal.target];
     if (el) $(el).classList.add('target');
     $('bar').style.visibility = 'visible';

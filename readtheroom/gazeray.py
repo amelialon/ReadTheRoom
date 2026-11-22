@@ -84,17 +84,49 @@ class GazeRay:
                           math.cos(yaw) * math.cos(pitch)])
         return origin, unit(rot @ local)
 
+    REST_DEG = 3.0   # frames this close together are the eyes at rest
+
     def learn(self, target: str, features, distance_cm: float | None = None) -> None:
-        """One look: follow the mean ray out to the table and keep the point."""
+        """One look: follow the ray out to the table and keep the point.
+
+        The ray is taken from where the eyes came to rest, not the mean of
+        every frame: a look usually begins with the eyes still travelling
+        from the last target, and a blink puts a frame anywhere. The frames
+        used are the steady run at the end of the look; failing that, the
+        tightest cluster; failing that, all of them. `spread` reports how
+        far the whole look wandered from the point kept, so an unsteady
+        look is still visible afterwards.
+        """
         rays = [r for r in (self.ray(f) for f in features) if r is not None]
         if len(rays) < 3:
             raise ValueError("too few readable frames to learn from")
-        origin = np.mean([r[0] for r in rays], axis=0)
-        direction = unit(np.mean([r[1] for r in rays], axis=0))
+        dirs = [r[1] for r in rays]
+        kept = self._resting(dirs)
+        origin = np.mean([rays[i][0] for i in kept], axis=0)
+        direction = unit(np.mean([dirs[i] for i in kept], axis=0))
         if distance_cm is None:
             distance_cm = self.distance_cm
         self.points[target] = (origin + distance_cm * direction).tolist()
-        self.spread[target] = round(float(np.mean([angle_between(r[1], direction) for r in rays])), 1)
+        self.spread[target] = round(float(np.mean([angle_between(d, direction) for d in dirs])), 1)
+
+    def _resting(self, dirs: list) -> list:
+        """Indices of the frames where the eyes were at rest."""
+        n = len(dirs)
+        enough = max(3, n // 3)
+        # The steady run at the end: walk back while each frame stays within
+        # REST_DEG of the run's mean.
+        run = [n - 1]
+        for i in range(n - 2, -1, -1):
+            mean = unit(np.mean([dirs[j] for j in run], axis=0))
+            if angle_between(dirs[i], mean) >= self.REST_DEG:
+                break
+            run.append(i)
+        if len(run) >= enough:
+            return run
+        # Otherwise the tightest cluster: the frame most of the others agree with.
+        medoid = min(range(n), key=lambda i: sum(angle_between(dirs[i], d) for d in dirs))
+        cluster = [i for i in range(n) if angle_between(dirs[i], dirs[medoid]) < self.REST_DEG]
+        return cluster if len(cluster) >= 3 else list(range(n))
 
     def forget(self, target: str | None = None) -> None:
         if target is None:

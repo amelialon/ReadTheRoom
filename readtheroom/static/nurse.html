@@ -173,6 +173,7 @@
   .trow .teach { white-space: nowrap; }
   .trow .teach.done { background: var(--accent); color: #fff; box-shadow: none; }
   .trow .teach.busy { background: var(--blush); box-shadow: none; }
+  .trow .teach.doubt { background: #f7e6e4; color: var(--danger); box-shadow: none; }
   .trow .x { width: 30px; height: 30px; padding: 0; }
   #targetRows { display: flex; flex-direction: column; gap: 8px; }
   #photoFile { display: none; }
@@ -594,6 +595,13 @@ let draft = null, draftKey = null, adding = false;
 function renderTable(s) {
   const tb = s.table, ses = s.session;
   const have = tb.photo_id != null && tb.size;
+  // A taught look the device does not trust: the eyes never settled, wandered
+  // far, or landed on another spot. The patient may have looked at the wrong thing.
+  function doubtText(tb) {
+    const names = Object.fromEntries(tb.targets.map(t => [t.id, t.label]));
+    return Object.entries(tb.doubts || {}).map(([id, why]) => 'The ' + (names[id] || 'screen') + ' look may be wrong: ' + why + '.').join(' ');
+  }
+  window.doubtText = doubtText;
   $('sceneHint').style.display = have ? 'none' : 'grid';
   $('sceneHint').textContent = 'No photo of the table yet. Open Device from the menu and add one.';
   if (!have) { fitCam(4, 3); $('camHelp').textContent = ''; $('dot').style.display = 'none'; return; }
@@ -628,6 +636,7 @@ function renderTable(s) {
   $('camHelp').textContent = tb.teaching ? 'Teaching: the patient looks at the ' + (names[tb.teaching] || 'screen')
     : !tb.targets.length ? gazeText + (tb.found.length ? '. Open Device to confirm the spots' : '. Open Device to mark the spots')
     : taught < tb.targets.length ? gazeText + '. Taught ' + taught + ' of ' + tb.targets.length
+    : doubtText(tb) ? doubtText(tb) + ' Teach it again from Device, or calibrate again.'
     : ranked.length && deg ? 'Nearest: ' + (names[ranked[0][0]] || 'screen') + ', ' + ranked[0][1] + '\u00b0 off. ' + gazeText : gazeText;
 }
 
@@ -801,7 +810,7 @@ function render(s) {
   chip('calState', calText, s.calibrated && !cal.active ? 'good' : '');
   $('check').textContent = cal.active ? 'Calibrating: step ' + cal.step + ' of ' + cal.steps
     : cal.error ? cal.error
-    : s.table ? (st.simulate ? 'Simulation: press a spot below to stand in for a look.' : s.calibrated ? 'Calibrated. Do it again at the start of every session, or when the laptop or the patient has moved.' : 'Not calibrated. Press Calibrate under the room view: the patient looks at the screen centre, YES, NO, then each object, two seconds each.')
+    : s.table ? (st.simulate ? 'Simulation: press a spot below to stand in for a look.' : s.calibrated ? (window.doubtText && doubtText(s.table) ? doubtText(s.table) + ' Teach it again below, or calibrate again.' : 'Calibrated. Do it again at the start of every session, or when the laptop or the patient has moved.') : 'Not calibrated. Press Calibrate under the room view: the patient looks at the screen centre, YES, NO, then each object. Each look is recorded once the eyes have come to rest on it.')
     : st.simulate ? 'Simulation mode: calibration is not needed.'
     : st.gaze_mode === 'quick' ? (s.calibrated ? 'The device learned the centre from one look at the screen and keeps it up to date.' : 'Waiting for the patient to look at the screen.')
     : !s.calibrated ? 'Not calibrated.'
@@ -904,9 +913,12 @@ function renderTableSheet(s) {
     const learned = t.id in tb.learned, busy = tb.teaching === t.id;
     btn.disabled = !saved || st.simulate || !!tb.teaching;
     btn.className = 'pill soft small teach' + (busy ? ' busy' : learned ? ' done' : '');
-    btn.textContent = busy ? 'Watching\u2026' : learned ? 'Taught, ' + (tb.learned[t.id] || 0) + '\u00b0 steady' : saved ? 'Teach' : 'Save first';
+    const doubt = (tb.doubts || {})[t.id];
+    btn.textContent = busy ? 'Watching\u2026' : learned ? (doubt ? 'Taught, check it' : (tb.learned[t.id] || 0) < 3 ? 'Taught, steady' : 'Taught, wandered ' + tb.learned[t.id] + '\u00b0') : saved ? 'Teach' : 'Save first';
+    btn.classList.toggle('doubt', !!(learned && doubt && !busy));
   });
   $('teachHelp').textContent = s.calibration.error ? s.calibration.error
+    : window.doubtText && doubtText(tb) ? doubtText(tb) + ' Press Teach on that spot and have the patient look at it again.'
     : Object.entries(s.self_check).filter(([k, v]) => v < 0.7).length ? 'A taught look is hard to recognise; move that object further from the others and teach it again.' : '';
 }
 function suggestionsFrom(tb) {

@@ -157,3 +157,32 @@ def test_dot_moves_before_anything_is_taught(reader):
     assert anchored == [0.5, 0.8]                        # one spot: it anchors the map
     deg = reader.gaze_angles(frame(home, 0, 0, [20, -8, -5], reader), reader.points["rest"])
     assert deg[0] > 15 and abs(deg[1]) < 2
+
+
+def test_learns_from_where_the_eyes_came_to_rest(reader):
+    """A look recorded while the eyes were still arriving: the first frames
+    point at the previous target, the rest at the object. The point learned
+    is the object, not somewhere between."""
+    home = [0, 0, -50]
+    travel = [frame(home, 0, 0, SNACK, reader)] * 5
+    there = [frame(home, 0, 0, BOTTLE, reader)] * 8
+    reader.learn("bottle", travel + there)
+    reader.learn("snack", [frame(home, 0, 0, SNACK, reader)] * 5)
+    assert reader.predict(frame(home, 0, 0, BOTTLE, reader)) == "bottle"
+    assert np.allclose(reader.points["bottle"], BOTTLE, atol=1.0)
+    assert reader.spread["bottle"] > 5     # the wander is still reported
+
+
+def test_a_blink_in_the_look_does_not_move_the_point(reader):
+    home = [0, 0, -50]
+    frames = [frame(home, 0, 0, BOTTLE, reader)] * 10
+    blink = frame(home, 0, 0, [0, -80, 20], reader)   # the eyelid read as a look far down
+    reader.learn("bottle", frames[:4] + [blink, blink] + frames[4:])
+    assert np.allclose(reader.points["bottle"], BOTTLE, atol=1.0)
+
+
+def test_a_look_that_never_settled_still_learns_something(reader):
+    home = [0, 0, -50]
+    sweep = [frame(home, 0, 0, [x, 8.0, 20.0], reader) for x in np.linspace(-30, 30, 12)]
+    reader.learn("bottle", sweep)
+    assert "bottle" in reader.points

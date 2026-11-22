@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 
@@ -850,3 +852,48 @@ def test_gaze_plus_scene_asks_about_what_is_really_there(quick_app, tmp_path):
     app.scene.set()                           # scene camera sees nothing it knows
     run(centre, 0.5); run(left, 2.0)          # falls back to the typed objects
     assert "thirsty" in app.session.prompt["question"].lower()
+
+
+def _dir(yaw_deg):
+    a = math.radians(yaw_deg)
+    return np.array([math.sin(a), 0.0, math.cos(a)])
+
+
+def test_calibrator_waits_for_the_eyes_to_stop():
+    """With a direction function the recording starts when the gaze has
+    been still for a moment, not on the clock: a look that takes a while
+    to find its object is recorded where it ended up."""
+    cal = Calibrator([("cup", "Look at the cup")], 1.0, 1.0, min_samples=3, passes=1,
+                     steady=lambda f: _dir(f[0]), wait_s=3.0)
+    t = 0.0
+    cal.start(t)
+    # The eyes travel for 2 s (yaw sweeping 20 degrees), then rest.
+    while not cal.update(t, np.array([10.0 * t if t < 2.0 else 20.0])):
+        t += DT
+        assert t < 10
+    assert cal.error is None and cal.unsettled == []
+    assert all(x[0] == 20.0 for x in cal.X), "frames from the travel were recorded"
+    assert 3.0 < t < 3.7     # 2 s of travel, about 0.4 s to count as still, 1 s recorded
+
+
+def test_calibrator_gives_up_waiting_and_says_so():
+    cal = Calibrator([("cup", "Look at the cup")], 0.5, 0.5, min_samples=3, passes=1,
+                     steady=lambda f: _dir(f[0]), wait_s=1.0)
+    t = 0.0
+    cal.start(t)
+    while not cal.update(t, np.array([40.0 * t])):   # never still
+        t += DT
+        assert t < 10
+    assert cal.unsettled == ["cup"] and cal.error is None
+    assert 1.9 < t < 2.2    # settle 0.5 + wait 1.0 + record 0.5
+
+
+def test_calibrator_steady_eyes_record_on_time():
+    cal = Calibrator([("cup", "Look at the cup")], 1.0, 1.0, min_samples=3, passes=1,
+                     steady=lambda f: _dir(20.0), wait_s=3.0)
+    t = 0.0
+    cal.start(t)
+    assert not cal.snapshot(0.5)["recording"]
+    while not cal.update(t, np.array([1.0])):
+        t += DT
+    assert 1.9 < t < 2.2 and cal.unsettled == []

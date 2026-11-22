@@ -272,3 +272,54 @@ def test_only_the_most_spread_out_spots_are_in(tmp_path):
                        {"need": "water bottle", "box": [0, 0, 0.2, 0.2], "active": False},
                        {"need": "cup", "box": [0.1, 0, 0.3, 0.2], "active": True}])
     assert list(table.zones()) == ["t:cup"]
+
+
+def test_a_slow_look_is_recorded_where_the_eyes_ended_up(table_app):
+    """The patient takes a while to find the bottle: the eyes sit on the
+    snack for a second and a half after the prompt. The recording waits,
+    the point learned is the bottle, and nothing is flagged."""
+    app, run = table_app
+    app.set_table_photo(TINY_JPEG)
+    app.set_table_targets([{"id": REST, "box": [0, 1, 1, 2]},
+                           {"need": "water bottle", "box": [0, 0, 1, 1]},
+                           {"need": "snack packet", "box": [1, 0, 2, 1]}])
+    where = {REST: SCREEN, "yes": YES_SPOT, "no": NO_SPOT, "t:water-bottle": BOTTLE, "t:snack-packet": SNACK}
+    home = [0, 0, -50]
+    assert app.request_calibration()
+    run(None, 0.1)
+    late = False
+    steps = 0
+    while app.calibrator.active and steps < 80:
+        target = app.calibrator.snapshot(0)["target"]
+        if target == "t:water-bottle" and not late:
+            run(frame(home, 0, 0, SNACK, app.ray), 1.5)   # still on the snack
+            late = True
+        run(frame(home, 0, 0, where[target], app.ray), 0.5)
+        steps += 1
+    assert app.calibrator.error is None
+    assert np.allclose(app.ray.points["t:water-bottle"], BOTTLE, atol=1.0)
+    assert app.doubts == {}
+    assert app.hub._state["table"]["doubts"] == {}
+
+
+def test_a_look_at_the_wrong_object_is_flagged(table_app):
+    """Asked to look at the bottle, the patient stares at the snack. The
+    look is learned (the device cannot know better) but flagged, and
+    teaching the bottle again clears the flag."""
+    app, run = table_app
+    app.set_table_photo(TINY_JPEG)
+    app.set_table_targets([{"id": REST, "box": [0, 1, 1, 2]},
+                           {"need": "water bottle", "box": [0, 0, 1, 1]},
+                           {"need": "snack packet", "box": [1, 0, 2, 1]}])
+    calibrate(app, run, {REST: SCREEN, "yes": YES_SPOT, "no": NO_SPOT,
+                         "t:water-bottle": SNACK, "t:snack-packet": SNACK})
+    doubts = app.hub._state["table"]["doubts"]
+    assert set(doubts) & {"t:water-bottle", "t:snack-packet"}
+    assert any("snack" in why or "water bottle" in why for why in doubts.values())
+    # Teach the bottle properly: the flag goes.
+    assert app.request_teach("t:water-bottle")
+    run(None, 0.1)
+    run(frame([0, 0, -50], 0, 0, BOTTLE, app.ray), 4.0)
+    assert not app.calibrator.active and app.calibrator.error is None
+    assert "t:water-bottle" not in app.doubts
+    assert "t:snack-packet" not in app.doubts or np.allclose(app.ray.points["t:water-bottle"], BOTTLE, atol=1.0)

@@ -7,12 +7,14 @@ import threading
 import time
 import traceback
 
+import numpy as np
+
 from .alerts import AlertStore
 from .calibration import Calibrator, control_targets
 from .config import ANSWER_MODES, Config, NO, REST, YES
 from .directions import CENTRE, LEFT, RIGHT, UP, DirectionReader
 from .features import Ema
-from .gazeray import GazeRay
+from .gazeray import GazeRay, angle_between
 from .prompts import Zone, load_menu, load_needs, load_zones
 from .server import Hub, serve
 from .session import Session
@@ -88,8 +90,8 @@ class App:
             self._feature = None
             self._q_state = None
             self._q_centred = False
-            self.calibrator = Calibrator([(REST, "Look at the screen")], cfg.teach_settle_s,
-                                         cfg.teach_record_s, cfg.teach_min_samples, passes=1)
+            self.doubts: dict = {}   # taught look -> why it may be wrong
+            self.calibrator = self._teacher([(REST, "Look at the screen")])
         self._want_calibration = False
         self._debug_gaze: str | None = REST
         self._temp: float | None = None
@@ -131,6 +133,7 @@ class App:
         suggested = self.table.set_photo(jpeg, self.detector)
         self.ray.forget()
         self.self_check = {}
+        self.doubts = {}
         if suggested:  # the spots appear by themselves; the nurse can still edit them
             self.table.set_targets(suggested)
         self._table_dirty = True
@@ -156,8 +159,10 @@ class App:
         self.ray.forget(target)
         if target is None:
             self.self_check = {}
+            self.doubts = {}
         else:
             self.self_check.pop(target, None)
+            self.doubts.pop(target, None)
         try:
             self.ray.save(self._ray_path)
         except OSError:
@@ -196,12 +201,55 @@ class App:
             if target not in keep:
                 self.ray.forget(target)
                 self.self_check.pop(target, None)
+                self.doubts.pop(target, None)
 
     def request_calibration(self) -> bool:
         if self.simulate:
             return False
         self._want_calibration = True
         return True
+
+    def _teacher(self, targets) -> Calibrator:
+        """One pass over `targets`, each look recorded once the eyes have
+        stopped on it (see Calibrator) rather than on the clock."""
+        def direction(feature):
+            r = self.ray.ray(feature)
+            return None if r is None else r[1]
+        return Calibrator(targets, self.cfg.teach_settle_s, self.cfg.teach_record_s,
+                          self.cfg.teach_min_samples, passes=1, steady=direction,
+                          wait_s=self.cfg.teach_wait_s, steady_deg=self.cfg.teach_steady_deg)
+
+    def _doubts(self, looks: dict, unsettled) -> dict:
+        """Why a look just taught may not be the object it was meant for:
+        the eyes never stopped, they wandered far during the look, or the
+        point lands on top of another taught spot (the patient looked at
+        the wrong thing, or two objects sit too close together)."""
+        names = {t["id"]: t["label"] for t in self.table.targets}
+        names[REST] = "screen"
+        out = {}
+        for target, frames in looks.items():
+            spread = self.ray.spread.get(target, 0.0)
+            if target in unsettled:
+                out[target] = "the eyes never settled on it"
+                continue
+            if spread > self.cfg.teach_doubt_deg:
+                out[target] = f"the eyes wandered {spread:.0f}° during the look"
+                continue
+            point = self.ray.points.get(target)
+            origins = [r[0] for r in (self.ray.ray(f) for f in frames) if r is not None]
+            if point is None or not origins:
+                continue
+            head = np.mean(origins, axis=0)
+            for other, p in self.ray.points.items():
+                if other == target:
+                    continue
+                # Separation as the eyes see it: the angle between the two
+                # lines from where the head was.
+                apart = angle_between(np.asarray(point) - head, np.asarray(p) - head)
+                if apart < self.cfg.ray_accept_deg / 2:
+                    out[target] = f"it landed almost on the {names.get(other, other)}, {apart:.0f}° away"
+                    break
+        return out
 
     def _table_targets(self) -> list:
         """The looks one session needs: screen centre, YES, NO, then each
@@ -438,6 +486,8 @@ class App:
                     self._save_teach(target, frames)
                 for target, frames in looks.items():
                     self.self_check[target] = self.ray.self_check({target: frames})[target]
+                    self.doubts.pop(target, None)
+                self.doubts.update(self._doubts(looks, cal.unsettled))
                 self.ray.save(self._ray_path)
             except (ValueError, OSError) as exc:
                 self.calibrator.error = f"Could not learn that look: {exc}"
@@ -470,8 +520,7 @@ class App:
         if self._want_calibration:
             self._want_calibration = False
             if self.table_mode:
-                self.calibrator = Calibrator(self._table_targets(), self.cfg.teach_settle_s,
-                                             self.cfg.teach_record_s, self.cfg.teach_min_samples, passes=1)
+                self.calibrator = self._teacher(self._table_targets())
                 self._teaching = "all"
             self.calibrator.start(now)
         if self.table_mode:
@@ -494,8 +543,7 @@ class App:
                 target, self._want_teach = self._want_teach, None
                 label = next((t["label"] for t in self.table.targets if t["id"] == target), target)
                 what = "the screen" if target == REST else "the " + label
-                self.calibrator = Calibrator([(target, f"Look at {what}")], self.cfg.teach_settle_s,
-                                             self.cfg.teach_record_s, self.cfg.teach_min_samples, passes=1)
+                self.calibrator = self._teacher([(target, f"Look at {what}")])
                 self._teaching = target
                 self.calibrator.start(now)
         if self.scene is not None and self.scene.version != self._scene_version:
@@ -586,6 +634,7 @@ class App:
             "gaze_uv": None if self.simulate else self.ray.project(self._feature, self.table.centres()),
             "gaze_deg": None if self.simulate else self.ray.gaze_angles(self._feature, self.ray.points.get(REST)),
             "teaching": self._teaching,
+            "doubts": self.doubts,
             "ready": ready,
             "camera": self.table_source is not None,
         })

@@ -63,11 +63,17 @@ class Config:
     ray_margin_deg: float = 2.0     # and this much closer than the runner-up
     table_glance_s: float = 2.2     # a hold this long asks about an object; a passing glance does not
     ray_screen_deg: float = 14.0    # this close to the screen line counts as "on the screen"
-    # One look while calibrating: a full second for the eyes to get there,
-    # then 1.3 s recorded. 2.3 s a look, about fourteen for six. Felt rushed
-    # at 1.5 and 2.0; the settle is what makes it feel unhurried.
+    # One look while calibrating: a second for the prompt to be read, then
+    # the recording starts when the eyes have stopped moving (within
+    # teach_steady_deg over 0.4 s), or after teach_wait_s more at the latest.
+    # 1.3 s is recorded. A quick look takes 2.3 s; one that takes longer to
+    # find its object takes as long as it takes, up to 4.8 s. Recording on
+    # the clock alone taught points halfway between two objects (Nov 22).
     teach_settle_s: float = 1.0
     teach_record_s: float = 1.3
+    teach_wait_s: float = 2.5
+    teach_steady_deg: float = 3.0
+    teach_doubt_deg: float = 6.0    # a look that wandered this far is flagged for re-teaching
     teach_min_samples: int = 6      # readable frames a look needs (12 Hz on the Pi gives about 12)
     greet_settle_s: float = 0.8
     greet_record_s: float = 1.7
