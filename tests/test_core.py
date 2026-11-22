@@ -643,6 +643,24 @@ def test_direction_reader_follows_slow_drift_only():
     assert reader.read(_look(out_l=0.4)) == "left"
 
 
+def test_direction_reader_balances_a_weaker_side_from_one_look_each_way():
+    from readtheroom.directions import DirectionReader
+    reader = DirectionReader(h_threshold=0.14)
+    reader.set_centre([_look()] * 5)
+    reader.set_sides([_look(out_l=0.3)] * 5, [_look(in_l=0.5)] * 5)   # left glances read weaker
+    assert reader.read(_look(out_l=0.1)) == "left"     # a small left glance now counts
+    assert reader.read(_look(in_l=0.1)) == "centre"    # right is no easier than before
+    reader.set_sides([_look(out_l=0.3)] * 5, [_look(in_l=0.04)] * 5)  # never looked right: even again
+    assert reader.read(_look(out_l=0.1)) == "centre"
+    reader.set_sides([_look(out_l=0.05)] * 5, [_look(in_l=0.5)] * 5)  # never looked left: even again
+    assert reader.read(_look(out_l=0.1)) == "centre"
+    reader.set_sides([_look(out_l=0.1)] * 5, [_look(in_l=2.0)] * 5)   # very lopsided: at most half
+    assert reader.read(_look(out_l=0.06)) == "centre" and reader.read(_look(out_l=0.08)) == "left"
+    reader.set_sides([_look(out_l=0.3)] * 5, [_look(in_l=0.5)] * 5)
+    reader.set_centre([_look()] * 5)                  # a new centre (new person): balance forgotten
+    assert reader.read(_look(out_l=0.1)) == "centre"
+
+
 def test_zone_slots_are_validated(tmp_path):
     import json
     zone = {"label": "l", "question": "q", "message": "m"}
@@ -712,6 +730,22 @@ def test_quick_mode_end_to_end(quick_app):
     run(left, 1.6)                       # now left means YES
     assert app.session.state == SENT
     assert app.alerts.list()[0]["message"] == "Bed 4: patient is thirsty and wants water"
+
+
+def test_quick_mode_staff_calibration_balances_left_and_right(quick_app):
+    app, run = quick_app
+    centre, weak_left = _look(), _look(out_l=0.12)    # 0.12 is under the usual 0.14
+    run(centre, 3.0)                                  # the greeting: centre only
+    run(centre, 1.0); run(weak_left, 2.0)
+    assert app.session.state == IDLE                  # too small a glance to count yet
+    app.request_calibration()                         # staff press "Start calibration"
+    run(centre, 2.6)
+    assert app.calibrator.snapshot(0)["instruction"] == "Look to your left"
+    run(_look(out_l=0.3), 2.5)
+    run(_look(in_l=0.5), 2.5)                         # right glances read stronger
+    assert not app.calibrator.active and app.calibrator.error is None
+    run(centre, 1.0); run(weak_left, 2.0)
+    assert app.session.state == PROMPT                # the same small left glance now asks
 
 
 def test_quick_mode_no_and_menu(quick_app):
@@ -850,3 +884,94 @@ def test_gaze_plus_scene_asks_about_what_is_really_there(quick_app, tmp_path):
     app.scene.set()                           # scene camera sees nothing it knows
     run(centre, 0.5); run(left, 2.0)          # falls back to the typed objects
     assert "thirsty" in app.session.prompt["question"].lower()
+
+
+# --- mapping: gaze -> point in the scene photo --------------------------------
+
+TARGETS = {"pen": [90, 520, 170, 640], "bottle": [700, 270, 830, 600],
+           "phone": [1280, 490, 1460, 630], "screen": [750, 900, 750, 900]}
+
+
+def _centre(box):
+    return [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2]
+
+
+TARGETS6 = {**TARGETS, "yes": [430, 940, 430, 940], "no": [1080, 940, 1080, 940]}
+
+
+def _samples(true_map, noise=0.0, n=20, seed=0, targets=TARGETS):
+    """Eye readings that a known straight-line map turns into each target's centre."""
+    rng = np.random.default_rng(seed)
+    inverse = np.linalg.inv(true_map[:2])
+    out = {}
+    for name, box in targets.items():
+        eye = (np.array(_centre(box)) - true_map[2]) @ inverse
+        out[name] = eye + rng.normal(0, noise, size=(n, 2))
+    return out
+
+
+TRUE_MAP = np.array([[-2000.0, 150.0], [100.0, -1500.0], [800.0, 700.0]])
+
+
+def test_mapping_recovers_a_straight_line_map():
+    from readtheroom import mapping
+    samples = _samples(TRUE_MAP)
+    m = mapping.fit(samples, {k: _centre(b) for k, b in TARGETS.items()})
+    for name, box in TARGETS.items():
+        assert np.allclose(mapping.predict(m, samples[name][0]), _centre(box), atol=1.0)
+
+
+def test_mapping_uses_each_targets_median_so_a_blink_does_not_drag_the_fit():
+    from readtheroom import mapping
+    samples = _samples(TRUE_MAP)
+    samples["phone"][:3] = [5.0, 5.0]                   # a few wild frames (a blink)
+    m = mapping.fit(samples, {k: _centre(b) for k, b in TARGETS.items()})
+    assert np.allclose(mapping.predict(m, samples["bottle"][5]), _centre(TARGETS["bottle"]), atol=1.0)
+
+
+def test_mapping_homography_recovers_a_perspective_map():
+    from readtheroom import mapping
+    H = np.array([[-1800.0, 120.0, 800.0], [90.0, -1400.0, 700.0], [0.3, -0.2, 1.0]])
+    rng = np.random.default_rng(1)
+    eye = rng.uniform(-0.3, 0.3, size=(6, 2))
+    proj = np.column_stack([eye, np.ones(6)]) @ H.T
+    pix = proj[:, :2] / proj[:, 2:]
+    samples = {i: eye[i:i + 1] for i in range(6)}
+    points = {i: pix[i] for i in range(6)}
+    m = mapping.fit(samples, points, kind="homography")
+    assert np.allclose(mapping.predict(m, eye[2]), pix[2], atol=0.5)
+    straight = mapping.fit(samples, points)              # a straight line cannot follow it
+    assert not np.allclose(mapping.predict(straight, eye[2]), pix[2], atol=0.5)
+
+
+def test_mapping_refuses_to_fit_from_too_few_targets():
+    from readtheroom import mapping
+    three = {k: TARGETS[k] for k in ("pen", "bottle", "phone")}
+    samples = _samples(TRUE_MAP, targets=three)
+    points = {k: _centre(b) for k, b in three.items()}
+    mapping.fit(samples, points)                          # 3 is enough for a straight line
+    with pytest.raises(ValueError):
+        mapping.fit(samples, points, kind="homography")   # a perspective map needs 4
+    with pytest.raises(ValueError):
+        mapping.fit({"pen": samples["pen"], "bottle": samples["bottle"]}, points)
+    with pytest.raises(ValueError):                      # nothing recorded: no verdict, not a pass
+        mapping.leave_one_out({}, TARGETS)
+
+
+def test_mapping_leave_one_out_flags_each_target_it_can_place():
+    from readtheroom import mapping
+    for kind in ("affine", "homography"):
+        report = mapping.leave_one_out(_samples(TRUE_MAP, noise=0.002, targets=TARGETS6), TARGETS6, kind)
+        assert set(report) == set(TARGETS6)
+        assert all(r["nearest"] == name for name, r in report.items()), kind
+        assert all(r["error_px"] < 30 for r in report.values()), kind
+
+
+def test_mapping_picks_the_nearest_object_within_reach_only():
+    from readtheroom import mapping
+    radius = mapping.reach(TARGETS)
+    assert 0 < radius < 300                              # half the closest gap
+    assert mapping.nearest([800, 400], TARGETS, radius) == "bottle"   # inside its box
+    assert mapping.nearest([1250, 560], TARGETS, radius) == "phone"   # just outside, close
+    assert mapping.nearest([1100, 100], TARGETS, radius) is None      # empty table
+    assert mapping.nearest([-50, 560], TARGETS, radius, size=(2000, 1333)) is None  # off the photo

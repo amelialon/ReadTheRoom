@@ -67,6 +67,7 @@ class DirectionReader:
         self.weights = {"iris_weight": iris_weight, "head_weight": head_weight,
                         "iris_v_weight": iris_v_weight, "head_v_weight": head_v_weight}
         self.centre = None  # (h, v) when looking at the middle of the screen
+        self.h_left = self.h_right = h_threshold  # per side, see set_sides()
         self._last: dict = {}
 
     def _hv(self, feature):
@@ -79,6 +80,29 @@ class DirectionReader:
             raise ValueError("no frames to learn the centre from")
         self.centre = (sum(p[0] for p in pairs) / len(pairs),
                        sum(p[1] for p in pairs) / len(pairs))
+        self.h_left = self.h_right = self.h_threshold  # a new centre is often a new person
+
+    def set_sides(self, left_features, right_features) -> None:
+        """Balance left and right from a look each way (after set_centre).
+
+        MediaPipe's eye scores can read one side weaker, e.g. when the face is
+        not square to the camera, so that side gets a lower threshold in
+        proportion, down to half. No threshold is ever raised, and if either
+        look did not reach half the threshold, both stay even.
+        """
+        def reach(features, sign):
+            dh = sorted(sign * (self._hv(f)[0] - self.centre[0]) for f in features)
+            return dh[len(dh) // 2] if dh else 0.0
+
+        h, floor = self.h_threshold, self.h_threshold / 2
+        left, right = reach(left_features, 1), reach(right_features, -1)
+        self.h_left = self.h_right = h
+        if left < floor or right < floor:
+            return
+        if left < right:
+            self.h_left = max(floor, h * left / right)
+        else:
+            self.h_right = max(floor, h * right / left)
 
     def last(self) -> dict:
         """The most recent reading, for a live readout: how far the eyes are
@@ -92,9 +116,10 @@ class DirectionReader:
         s = signals(feature)
         h, v = combine(s, **self.weights)
         dh, dv = h - self.centre[0], v - self.centre[1]
-        self._last = {"side": round(dh / self.h_threshold, 2), "up": round(dv / self.v_threshold, 2),
+        h_threshold = self.h_left if dh > 0 else self.h_right
+        self._last = {"side": round(dh / h_threshold, 2), "up": round(dv / self.v_threshold, 2),
                       "head_yaw": round(s["head_yaw"], 3)}
-        if abs(dh) >= self.h_threshold:
+        if abs(dh) >= h_threshold:
             return LEFT if dh > 0 else RIGHT
         if dv >= self.v_threshold:
             return UP
