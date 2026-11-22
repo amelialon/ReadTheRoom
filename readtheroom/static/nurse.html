@@ -662,9 +662,10 @@ function renderWard(s) {
     card.querySelector('.line').textContent = b.id === 'live' ? (!online ? 'Device offline' : st.face_ok ? 'Patient in view' : 'Patient not in view')
       : b.device ? (b.patient ? b.patient + ' \u00b7 ' : '') + (b.online ? 'Device online' : 'Device offline') : 'No device paired';
     const count = card.querySelector('.count');
-    count.style.display = paired && mine.length ? '' : 'none';
+    const show = paired && mine.length > 0;
+    count.style.display = show ? '' : 'none';
     count.className = 'count' + (urgent ? ' urgent' : '');
-    count.textContent = mine.length + (mine.length === 1 ? ' request' : ' requests') + (urgent ? ', one urgent' : '');
+    count.textContent = show ? mine.length + (mine.length === 1 ? ' request' : ' requests') + (urgent ? ', one urgent' : '') : '';
     const temp = b.id === 'live' ? st.temp_c : b.temp, tempEl = card.querySelector('.quiet');
     tempEl.style.display = paired && temp != null ? '' : 'none';
     tempEl.textContent = temp != null ? temp.toFixed(1) + ' °C' : '';
