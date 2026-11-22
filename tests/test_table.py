@@ -211,3 +211,13 @@ def test_table_camera_photographs_and_populates_by_itself(tmp_path):
     assert REST in app.ray.points
     app.snap_table_photo()
     assert app.ray.points == {} and [t["id"] for t in app.table.targets] == [REST, "t:water-bottle"]
+
+
+def test_file_snapshot_source(tmp_path):
+    from readtheroom.camera import FileSnapshotSource
+    src = FileSnapshotSource(str(tmp_path / "scene.jpg"))
+    assert src.snapshot_jpeg() is None                   # nothing written yet
+    (tmp_path / "scene.jpg").write_bytes(TINY_JPEG[:20])  # half-written
+    assert src.snapshot_jpeg() is None
+    (tmp_path / "scene.jpg").write_bytes(TINY_JPEG)
+    assert src.snapshot_jpeg() == TINY_JPEG

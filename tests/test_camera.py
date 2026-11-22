@@ -52,3 +52,4 @@ def test_frame_file_ignores_a_broken_file(tmp_path):
     assert source.read() is None
     _write(path, 90)
     assert source.read() is not None
+

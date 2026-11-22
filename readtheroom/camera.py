@@ -63,6 +63,22 @@ class OpenCVCamera:
         return jpeg.tobytes() if ok else None
 
 
+class FileSnapshotSource:
+    """A camera that only ever needs one picture: the newest JPEG at a path
+    written by a capture process (qnx/capture on the Pi). For the table photo."""
+
+    def __init__(self, path: str):
+        self.path = path
+
+    def snapshot_jpeg(self):
+        try:
+            with open(self.path, "rb") as f:
+                data = f.read()
+        except OSError:
+            return None
+        return data if data.startswith(b"\xff\xd8") and data.endswith(b"\xff\xd9") else None
+
+
 class FileFrameSource:
     """Reads the newest JPEG written to a fixed path by a separate capture
     process (qnx/capture.c on the Pi, or qnx/frame_relay.py as a last resort).

@@ -650,6 +650,8 @@ def main() -> None:
     p.add_argument("--camera", type=int, default=0, help="OpenCV camera index of the camera that sees the patient's face")
     p.add_argument("--table-camera", type=int, help="index of a second camera looking at the table; "
                    "its picture becomes the table photo by itself, and 'Photograph the table' retakes it")
+    p.add_argument("--table-file", help="JPEG written by a capture process for the camera over the table "
+                   "(qnx/capture on the Pi); used like --table-camera")
     p.add_argument("--frame-file", help="read frames from a JPEG written by a capture process")
     p.add_argument("--model", default=os.path.join(root, "models", "face_landmarker.task"))
     p.add_argument("--gaze-mode", choices=("table", "quick", "trained"), default="table",
@@ -676,7 +678,7 @@ def main() -> None:
     zones = load_zones(args.zones)
     source = extractor = sensor = table_source = None
     if not args.simulate:
-        from .camera import FileFrameSource, OpenCVCamera
+        from .camera import FileFrameSource, FileSnapshotSource, OpenCVCamera
         from .features import FaceFeatureExtractor
         from .sensor import open_sensor
 
@@ -684,7 +686,9 @@ def main() -> None:
             raise SystemExit(f"Face model not found at {args.model}. See README.")
         extractor = FaceFeatureExtractor(args.model, cfg.blink_threshold)
         source = FileFrameSource(args.frame_file) if args.frame_file else OpenCVCamera(args.camera)
-        if args.table_camera is not None:
+        if args.table_file:
+            table_source = FileSnapshotSource(args.table_file)
+        elif args.table_camera is not None:
             if args.table_camera == args.camera:
                 raise SystemExit("--table-camera must be a different camera from --camera")
             table_source = OpenCVCamera(args.table_camera, 1280, 720)  # one photo: detail over rate
