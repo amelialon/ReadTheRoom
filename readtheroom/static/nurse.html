@@ -78,10 +78,16 @@
   body.family .staff-only { display: none !important; }
 
   /* Sign in. */
-  #gate { display: none; place-items: center; padding: 24px; }
+  #gate { display: none; padding: 24px; overflow-y: auto; }
   #gate.on { display: grid; }
-  #gate .sheet { width: min(560px, 100%); padding: 44px 44px 40px; display: flex; flex-direction: column; gap: 22px; }
+  /* margin:auto centres like place-items, but scrolls instead of clipping the top on short screens. */
+  #gate .sheet { margin: auto; width: min(560px, 100%); padding: 44px 44px 40px; display: flex; flex-direction: column; gap: 22px; }
   #gate h1 { margin: 0; font-size: 34px; letter-spacing: -.04em; line-height: 1.05; }
+  #gateMsg { color: var(--danger); }
+  #gate:not(.up) .up-only { display: none; }
+  #swapLine { color: var(--ink-2); }
+  .link { font: inherit; font-weight: 600; color: var(--accent-deep); background: none; border: 0; padding: 0; cursor: pointer; }
+  .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
   #gate .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .role { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border-radius: 20px; border: 0; cursor: pointer; text-align: left; font: inherit;
           background: rgba(255, 255, 255, .5); box-shadow: 0 0 0 1px rgba(255, 255, 255, .7); color: var(--ink);
@@ -260,14 +266,17 @@
 <!-- Sign in -->
 <section class="view" id="gate">
   <div class="sheet glass arrive">
-    <div><div class="eyebrow">Read the Room</div><h1 style="margin-top:10px">Who is signing in?</h1></div>
-    <div class="roles">
+    <div><div class="eyebrow">Read the Room</div><h1 id="gateTitle" style="margin-top:10px">Sign in</h1></div>
+    <div class="roles up-only">
       <button class="role on" data-role="staff"><b><svg class="icon"><use href="#i-user"/></svg>Staff</b><span>Nurses and care staff. Every bed, device controls and analytics.</span></button>
       <button class="role" data-role="family"><b><svg class="icon"><use href="#i-users"/></svg>Family</b><span>See what your person asks for and let them know you are coming.</span></button>
     </div>
-    <div class="field"><label for="who">Your name</label><input id="who" placeholder="Priya" autocomplete="name"></div>
-    <div class="row"><button class="pill" id="enter">Continue <span class="go">&#8594;</span></button>
-      <span class="quiet">No account is needed for this prototype. Your name stays on this device.</span></div>
+    <div class="field up-only"><label for="who">Your name</label><input id="who" placeholder="Priya" autocomplete="name"></div>
+    <div class="field"><label for="email">Email</label><input id="email" type="email" placeholder="priya@ward.example" autocomplete="email"></div>
+    <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password"></div>
+    <div class="row"><button class="pill" id="enter"><span id="enterLabel">Sign in</span> <span class="go">&#8594;</span></button>
+      <span class="quiet" id="gateMsg" role="alert"></span></div>
+    <div class="quiet" id="swapLine"><span id="swapLead">New here?</span> <button class="link" id="swap">Create an account</button></div>
   </div>
 </section>
 
@@ -384,6 +393,7 @@
   </div>
 </aside>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const post = (path, body) => fetch(path, {method: 'POST', body: JSON.stringify(body || {})});
@@ -403,25 +413,61 @@ const clock = s => s >= 3600 ? Math.floor(s / 3600) + 'h' + String(Math.floor(s 
 const chip = (id, text, cls) => { $(id).textContent = text; $(id).className = 'chip ' + (cls || '') + ($(id).dataset.staff ? ' staff-only' : ''); };
 const short = m => m.replace(/^[^:]*: patient /, '').replace(/^\w/, c => c.toUpperCase());
 
-/* Who is signed in, and which mode. Stored on this browser only. */
-const who = { role: localStorage.getItem('rtr.role'), name: localStorage.getItem('rtr.name') || '' };
+/* Supabase Auth accounts; the role and name are set at sign-up in the user's metadata. */
+const SUPABASE_URL = 'https://vdntgrysziohpbahmlzw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_3t0QhZZhTM3piu_WnP3jmQ_7Jdeow8z';  // public anon key: safe in the page
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+/* account: what the login allows. role: the mode shown now (staff may switch to family). */
+const who = { account: null, role: null, name: '' };
+function signedIn(user) {
+  const meta = (user && user.user_metadata) || {};
+  who.account = user ? (meta.role === 'staff' ? 'staff' : 'family') : null;
+  who.name = meta.name || '';
+  who.role = who.account === 'staff' && localStorage.getItem('rtr.role') === 'family' ? 'family' : who.account;
+  applyWho();
+}
 function applyWho() {
   document.body.classList.toggle('family', who.role === 'family');
   $('whoName').textContent = who.name || (who.role === 'family' ? 'Family' : 'Staff');
   $('whoRole').textContent = who.role === 'family' ? 'Family mode' : 'Hospital setting';
   $('modeLabel').textContent = who.role === 'family' ? 'Family' : 'Hospital';
+  $('toggleMode').style.display = who.account === 'staff' ? '' : 'none';
 }
 document.querySelectorAll('.role').forEach(b => b.onclick = () => {
   document.querySelectorAll('.role').forEach(x => x.classList.toggle('on', x === b));
 });
-$('enter').onclick = () => {
-  who.role = document.querySelector('.role.on').dataset.role;
-  who.name = $('who').value.trim();
-  localStorage.setItem('rtr.role', who.role); localStorage.setItem('rtr.name', who.name);
-  applyWho(); go('ward');
+const say = t => { $('gateMsg').textContent = t; };
+const credentials = () => ({ email: $('email').value.trim(), password: $('password').value });
+/* Supabase answers an empty email or a short password with a bare 422, so say it here. */
+const ready = c => !c.email ? say('Enter your email.') : c.password.length < 6 ? say('The password needs at least 6 characters.') : true;
+/* One card, two modes: sign in, or create an account with a role and name. */
+let signingUp = false;
+function gateMode(up) {
+  signingUp = up;
+  $('gate').classList.toggle('up', up);
+  $('gateTitle').textContent = $('enterLabel').textContent = up ? 'Create account' : 'Sign in';
+  $('swapLead').textContent = up ? 'Have an account?' : 'New here?';
+  $('swap').textContent = up ? 'Sign in' : 'Create an account';
+  $('password').autocomplete = up ? 'new-password' : 'current-password';
+  say('');
+}
+$('swap').onclick = () => gateMode(!signingUp);
+$('enter').onclick = async () => {
+  const c = credentials(); if (ready(c) !== true) return;
+  const meta = { role: document.querySelector('.role.on').dataset.role, name: $('who').value.trim() };
+  const { data, error } = signingUp
+    ? await sb.auth.signUp({ ...c, options: { data: meta } })
+    : await sb.auth.signInWithPassword(c);
+  if (error) return say(error.message);
+  if (!data.session) return say('Check your email to confirm the account, then sign in.');
+  signedIn(data.user); go('ward');
 };
-$('signOut').onclick = () => { localStorage.removeItem('rtr.role'); who.role = null; closeAll(); go('gate'); };
-$('toggleMode').onclick = () => { who.role = who.role === 'family' ? 'staff' : 'family'; localStorage.setItem('rtr.role', who.role); applyWho(); };
+$('password').onkeydown = e => { if (e.key === 'Enter') $('enter').click(); };
+$('signOut').onclick = async () => { await sb.auth.signOut(); localStorage.removeItem('rtr.role'); signedIn(null); gateMode(false); closeAll(); go('gate'); };
+$('toggleMode').onclick = () => {
+  if (who.account !== 'staff') return;
+  who.role = who.role === 'family' ? 'staff' : 'family'; localStorage.setItem('rtr.role', who.role); applyWho();
+};
 
 /* Beds: the live device plus two unpaired beds either side, so the flip has somewhere to go. */
 const beds = [{id: '3', name: 'Bed 3'}, {id: 'live'}, {id: '5', name: 'Bed 5'}];
@@ -756,16 +802,13 @@ es.onerror = () => offline('Device offline');
 setInterval(() => { if (lastMessage && Date.now() - lastMessage > 3000) offline('Device not responding'); }, 1000);
 window.addEventListener('resize', () => { if (state) renderScene(state); });
 
-/* Start on whatever the address says, or the sign-in sheet. */
-const as = new URLSearchParams(location.search).get('as');
-if (as === 'staff' || as === 'family') { who.role = as; localStorage.setItem('rtr.role', as); }
-applyWho();
+/* Start on whatever the address says once a saved login is restored, or the sign-in sheet. */
 function route() {
   const [view, arg] = location.hash.replace('#', '').split('/');
   go(['ward', 'bed', 'analytics'].includes(view) ? view : 'ward', arg);
 }
 window.addEventListener('hashchange', route);
-route();
+sb.auth.getSession().then(({ data }) => { signedIn(data.session && data.session.user); route(); });
 </script>
 </body>
 </html>
