@@ -221,3 +221,12 @@ def test_file_snapshot_source(tmp_path):
     assert src.snapshot_jpeg() is None
     (tmp_path / "scene.jpg").write_bytes(TINY_JPEG)
     assert src.snapshot_jpeg() == TINY_JPEG
+
+
+def test_a_broken_detector_still_leaves_a_photo(tmp_path):
+    class Broken:
+        def detect_jpeg(self, jpeg):
+            raise RuntimeError("Can't infer a dim denoted by -1")
+    table = Table(str(tmp_path / "table"), load_needs(ZONES))
+    assert table.set_photo(TINY_JPEG, Broken()) == []
+    assert table.photo == TINY_JPEG and table.found == [] and "infer" in table.detect_error

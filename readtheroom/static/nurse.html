@@ -834,7 +834,7 @@ function renderTableSheet(s) {
   $('tableTag').textContent = !tb.photo_id ? 'No photo' : !tb.targets.length ? 'No spots' : tb.teaching ? 'Teaching' : taught < tb.targets.length ? taught + ' of ' + tb.targets.length + ' taught' : 'Ready';
   $('tableTag').className = 'tag ' + (tb.ready ? 'good' : '');
   $('tableNote').textContent = !tb.photo_id ? (tb.camera ? 'Waiting for the table camera\u2019s first picture.' : 'Photograph the table from where the patient sits, with the screen in the picture.')
-    : !tb.targets.length ? (tb.found.length ? 'Check the spots the detector found, then save.' : 'Nothing recognised. Add spots by tapping the photo.')
+    : !tb.targets.length ? (tb.found.length ? 'Check the spots the detector found, then save.' : (tb.detect_error ? 'The detector cannot run on this device. ' : 'Nothing recognised. ') + 'Add spots with "Add a spot" and a tap on the photo, the screen first.')
     : 'Teach each spot: press Teach, then the patient looks at it for two seconds.';
   $('snapBtn').style.display = st.simulate ? 'none' : '';
   $('snapBtn').textContent = tb.camera ? (tb.photo_id ? 'Photograph the table again' : 'Photograph the table') : 'Use the patient camera';

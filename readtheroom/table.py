@@ -54,6 +54,7 @@ class Table:
         self.photo_id = 0
         self.size: tuple | None = None
         self.found: list = []             # what the detector saw, for suggestions
+        self.detect_error: str | None = None
         self.targets: list = []           # [{id, label, box, question, message, urgent}]
         self.version = 0
         self._load()
@@ -65,9 +66,13 @@ class Table:
             raise ValueError("not a JPEG photo")
         self.photo, self.size = jpeg, size
         self.photo_id += 1
-        self.found = []
+        self.found, self.detect_error = [], None
         if detector is not None:
-            self.found = self._detect(jpeg, detector)
+            try:
+                self.found = self._detect(jpeg, detector)
+            except Exception as exc:  # a detector that cannot run on this machine: spots are drawn by hand
+                self.detect_error = f"{type(exc).__name__}: {str(exc).splitlines()[-1][:160]}"
+                print(f"Object detection failed on the table photo; mark the spots by hand. {self.detect_error}", flush=True)
         self.targets = []  # a new photo means new positions
         self.version += 1
         self._save()
@@ -140,7 +145,7 @@ class Table:
 
     def snapshot(self) -> dict:
         return {"photo_id": self.photo_id if self.photo else None, "size": self.size,
-                "found": self.found, "targets": self.targets}
+                "found": self.found, "detect_error": self.detect_error, "targets": self.targets}
 
     # --- on disk ----------------------------------------------------------
     def _save(self) -> None:
