@@ -59,8 +59,9 @@ class Config:
     ray_eye_clamp: float = 0.45     # the eye scores saturate past this
     ray_iris_gain: float = 3.75     # radians per eye-width of iris travel
     ray_distance_cm: float = 70.0   # how far the objects are assumed to be
-    ray_accept_deg: float = 9.0     # a look counts within this of a target
+    ray_accept_deg: float = 12.0    # a look counts within this of a target (one look repeats to about 7)
     ray_margin_deg: float = 2.0     # and this much closer than the runner-up
+    table_glance_s: float = 2.2     # a hold this long asks about an object; a passing glance does not
     ray_screen_deg: float = 14.0    # this close to the screen line counts as "on the screen"
     teach_settle_s: float = 0.8
     teach_record_s: float = 1.6

@@ -110,7 +110,9 @@ def test_table_mode_end_to_end(table_app):
 
     # A look at the bottle, with the head turned toward it and shifted in the bed.
     run(look(SCREEN), 1.0)
-    run(look(BOTTLE, pos=[10, 3, -55], yaw=0.3), 2.0)
+    run(look(BOTTLE, pos=[10, 3, -55], yaw=0.3), 1.5)    # a glance: nothing yet
+    assert app.session.state == "idle"
+    run(look(BOTTLE, pos=[10, 3, -55], yaw=0.3), 1.5)    # a hold: asked
     assert app.session.state == "prompt" and "thirsty" in app.session.prompt["question"]
     run(look(BOTTLE, pos=[10, 3, -55], yaw=0.3), 3.0)      # still looking: not an answer
     assert app.alerts.list() == []
@@ -121,7 +123,7 @@ def test_table_mode_end_to_end(table_app):
 
     # The snack, answered with the NO look.
     run(look(SCREEN), app.cfg.sent_display_s + 1.5)
-    run(look(SNACK), 2.0)
+    run(look(SNACK), 3.0)
     assert app.session.state == "prompt" and "snack" in app.session.prompt["question"]
     run(look(SCREEN), 1.2)
     run(look(NO_SPOT), 1.6)
@@ -158,7 +160,7 @@ def test_simulation_uses_the_targets(tmp_path):
     app.set_table_photo(TINY_JPEG)
     app.set_table_targets([{"id": REST, "box": [0, 1, 1, 2]}, {"need": "water bottle", "box": [0, 0, 1, 1]}])
     clock = Clock()
-    for label, seconds in ((REST, 1.0), ("t:water-bottle", 2.0)):
+    for label, seconds in ((REST, 1.0), ("t:water-bottle", 3.0)):
         app.set_debug_gaze(label)
         for _ in range(int(seconds * 20)):
             clock.t += 0.05

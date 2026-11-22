@@ -25,6 +25,9 @@ class App:
                  source=None, extractor=None, sensor=None, simulate: bool = False,
                  scene=None, menu=(), needs=None, detector=None, table_source=None):
         self.cfg = cfg
+        if cfg.gaze_mode == "table":
+            # Wider target, longer hold: a meant look lands, a passing glance does not.
+            cfg.glance_window_s = cfg.table_glance_s
         self.zones = zones
         self.hub = hub
         self.source = source
