@@ -33,6 +33,7 @@ class App:
         self.source = source
         self.extractor = extractor
         self.sensor = sensor
+        self.central = None  # CentralReporter, when --central-url is given
         self.simulate = simulate
         self.scene = scene  # SceneWorker, or None when object detection is off
         self._scene_version = 0
@@ -541,6 +542,7 @@ class App:
                 "too_slow": 0 < self._fps < self.cfg.min_fps,
                 "nurse_screens": self.hub.count("nurse"),
                 "simulate": self.simulate,
+                "central": self.central.snapshot() if self.central else None,
                 "answer_mode": self.cfg.answer_mode,
                 "gaze_mode": "simulate" if self.simulate else ("quick" if self.quick else "table" if self.table_mode else "trained"),
                 "sides": self._sides if self.quick and not self.simulate else None,
@@ -687,6 +689,11 @@ def main() -> None:
                         "who can only move their eyes up and down")
     p.add_argument("--loop-hz", type=float, help="how many times a second to read the camera "
                    "(default 30; 10 to 15 is plenty and keeps a small board cool)")
+    p.add_argument("--central-url", default=os.environ.get("RTR_CENTRAL_URL"),
+                   help="central API (backend/) to report requests and heartbeats to, "
+                        "e.g. https://read-the-room-tau.vercel.app; or RTR_CENTRAL_URL")
+    p.add_argument("--device-id", default=os.environ.get("RTR_DEVICE_ID"), help="this device's UUID in the central database")
+    p.add_argument("--patient-id", default=os.environ.get("RTR_PATIENT_ID"), help="the patient this device is assigned to")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8000)
     args = p.parse_args()
@@ -728,6 +735,16 @@ def main() -> None:
     hub = Hub()
     app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate, scene,
               load_menu(args.zones), needs=needs, detector=detector, table_source=table_source)
+    if args.central_url:
+        from .central import CentralReporter
+        token = os.environ.get("RTR_DEVICE_TOKEN")
+        if not (token and args.device_id and args.patient_id):
+            raise SystemExit("--central-url needs --device-id, --patient-id and the device token in RTR_DEVICE_TOKEN")
+        app.central = CentralReporter(app.alerts, args.central_url, token, args.device_id, args.patient_id,
+                                      path=os.path.join(args.data_dir, "central.json"),
+                                      temperature=lambda: app._temp)
+        app.central.start()
+        print(f"Reporting to the central API at {args.central_url}")
     serve(hub, app, args.host, args.port)
     print(f"Patient screen: http://localhost:{args.port}/")
     print(f"Nurse station:  http://localhost:{args.port}/nurse")

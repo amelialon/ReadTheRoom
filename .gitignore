@@ -20,3 +20,6 @@ first_hour.txt
 test_photo.detected.jpg
 test_photo.jpeg
 
+dashboard/dist/
+.vercel
+.env*

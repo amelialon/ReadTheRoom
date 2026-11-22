@@ -40,9 +40,18 @@ if ! procs | grep -q "heartbeat.sh"; then
   nohup sh heartbeat.sh > /dev/null 2>&1 < /dev/null &
 fi
 
+# Reporting to the central API, when central.env is here (not in git):
+#   RTR_CENTRAL_URL, RTR_DEVICE_ID, RTR_PATIENT_ID, RTR_DEVICE_TOKEN
+CENTRAL=""
+if [ -f central.env ]; then
+  . ./central.env
+  export RTR_DEVICE_TOKEN
+  CENTRAL="--central-url $RTR_CENTRAL_URL --device-id $RTR_DEVICE_ID --patient-id $RTR_PATIENT_ID"
+fi
+
 # 12 reads a second: the gaze frames arrive at about that rate anyway, and
 # the board stays cooler than at 30. Reboots seen here at 85 degrees.
 nohup python3 -m readtheroom.supervisor --port 8080 --startup 90 -- \
-  --frame-file /tmp/gaze.jpg --table-file /tmp/scene.jpg --loop-hz 12 \
+  --frame-file /tmp/gaze.jpg --table-file /tmp/scene.jpg --loop-hz 12 $CENTRAL \
   > logs/app.log 2>&1 < /dev/null &
 echo "started table mode; log: logs/app.log"

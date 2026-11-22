@@ -250,6 +250,13 @@
   input[type=number] { font: inherit; padding: 9px 12px; width: 96px; border-radius: 999px; border: 0; background: var(--plate); box-shadow: 0 0 0 1px var(--edge); }
   #gaze { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill.small { padding: 8px 14px; font-size: 13px; }
+  /* Hosted dashboard: the data comes from the central API, the camera stays on the device. */
+  #codeField { display: none; }
+  body.central #codeField { display: flex; }
+  body.central #camWrap, body.central #openDevice, body.central #calState, body.central #banner, body.central #clearDone { display: none !important; }
+  body.central #body { grid-template-columns: minmax(0, 1fr); }
+  body.central #reqs { max-width: 760px; width: 100%; margin: 0 auto; }
+  body.central .alert .msg { font-size: 16px; }
   .pill.busy { background: var(--blush); color: var(--ink); cursor: default; }
   .pill:disabled { opacity: .7; transform: none; }
   #calibrateMain { flex: none; }
@@ -290,8 +297,9 @@
       <button class="role" data-role="family"><b><svg class="icon"><use href="#i-users"/></svg>Family</b><span>See what your person asks for and let them know you are coming.</span></button>
     </div>
     <div class="field"><label for="who">Your name</label><input id="who" placeholder="Priya" autocomplete="name"></div>
+    <div class="field" id="codeField"><label for="code">Access code</label><input id="code" type="password" placeholder="From the care team" autocomplete="off"></div>
     <div class="row"><button class="pill" id="enter">Continue <span class="go">&#8594;</span></button>
-      <span class="quiet">No account is needed for this prototype. Your name stays on this device.</span></div>
+      <span class="quiet" id="gateNote">No account is needed for this prototype. Your name stays on this device.</span></div>
   </div>
 </section>
 
@@ -428,6 +436,13 @@
 <script>
 const $ = id => document.getElementById(id);
 const post = (path, body) => fetch(path, {method: 'POST', body: JSON.stringify(body || {})});
+/* Hosted on Vercel the page is handed the central API's address (dashboard/build.sh);
+   served by the device there is none and the device's own stream is the source. */
+const CENTRAL = window.CENTRAL || null;
+if (CENTRAL) document.body.classList.add('central');
+const hdrs = () => ({Authorization: 'Bearer ' + who.token, 'Content-Type': 'application/json'});
+const ack = id => CENTRAL ? fetch(CENTRAL.api + '/api/requests/' + id, {method: 'PATCH', headers: hdrs(), body: JSON.stringify({state: 'acked'})})
+  : post('/api/ack', {id});
 const cards = new Map(), seen = new Map(), els = new Map();
 let layers, audio = null, debugBuilt = null, state = null, online = false, photoId = -1, previewOn = false, streaming = false, lastMessage = 0, bedName = 'Device';
 document.addEventListener('pointerdown', () => { audio = audio || new AudioContext(); }, {once: true});
@@ -445,7 +460,8 @@ const chip = (id, text, cls) => { $(id).textContent = text; $(id).className = 'c
 const short = m => m.replace(/^[^:]*: patient /, '').replace(/^\w/, c => c.toUpperCase());
 
 /* Who is signed in, and which mode. Stored on this browser only. */
-const who = { role: localStorage.getItem('rtr.role'), name: localStorage.getItem('rtr.name') || '' };
+const who = { role: localStorage.getItem('rtr.role'), name: localStorage.getItem('rtr.name') || '', token: localStorage.getItem('rtr.token') };
+if (CENTRAL) $('gateNote').textContent = 'The access code comes from the care team. It stays on this device.';
 function applyWho() {
   document.body.classList.toggle('family', who.role === 'family');
   $('whoName').textContent = who.name || (who.role === 'family' ? 'Family' : 'Staff');
@@ -455,29 +471,40 @@ function applyWho() {
 document.querySelectorAll('.role').forEach(b => b.onclick = () => {
   document.querySelectorAll('.role').forEach(x => x.classList.toggle('on', x === b));
 });
-$('enter').onclick = () => {
-  who.role = document.querySelector('.role.on').dataset.role;
-  who.name = $('who').value.trim();
+$('enter').onclick = async () => {
+  const role = document.querySelector('.role.on').dataset.role, name = $('who').value.trim();
+  if (CENTRAL) {
+    const code = $('code').value.trim() || who.token;
+    if (!code) { $('gateNote').textContent = 'The access code is needed.'; return; }
+    $('enter').classList.add('sent');
+    let ok = false;
+    try { ok = (await fetch(CENTRAL.api + '/api/settings', {headers: {Authorization: 'Bearer ' + code}})).ok; } catch (e) {}
+    $('enter').classList.remove('sent');
+    if (!ok) { $('gateNote').textContent = 'That code was not accepted. Check it and try again.'; return; }
+    who.token = code; localStorage.setItem('rtr.token', code);
+  }
+  who.role = role; who.name = name;
   localStorage.setItem('rtr.role', who.role); localStorage.setItem('rtr.name', who.name);
   applyWho(); go('ward');
+  if (CENTRAL) pollCentral();
 };
-$('signOut').onclick = () => { localStorage.removeItem('rtr.role'); who.role = null; closeAll(); go('gate'); };
+$('signOut').onclick = () => { localStorage.removeItem('rtr.role'); localStorage.removeItem('rtr.token'); who.role = null; who.token = null; closeAll(); go('gate'); };
 $('toggleMode').onclick = () => { who.role = who.role === 'family' ? 'staff' : 'family'; localStorage.setItem('rtr.role', who.role); applyWho(); };
 
 /* Beds: the live device plus two unpaired beds either side, so the flip has somewhere to go. */
-const beds = [{id: '3', name: 'Bed 3'}, {id: 'live'}, {id: '5', name: 'Bed 5'}];
+let beds = [{id: '3', name: 'Bed 3'}, {id: 'live'}, {id: '5', name: 'Bed 5'}];
 let bedIndex = 1;
 const bedLabel = b => b.id === 'live' ? bedName : b.name;
 
 /* Views and the drawers. */
 function go(view, arg) {
-  if (!who.role) view = 'gate';
+  if (!who.role || (CENTRAL && !who.token)) view = 'gate';
   if (view === 'bed' && arg != null) bedIndex = Math.max(0, beds.findIndex(b => b.id === arg));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === view));
   document.querySelectorAll('.item[data-go]').forEach(i => i.classList.toggle('now', i.dataset.go === view));
   location.hash = view === 'bed' ? 'bed/' + beds[bedIndex].id : view;
   closeAll();
-  if (state) render(state);
+  if (CENTRAL) renderCentral(); else if (state) render(state);
 }
 function closeAll() { document.body.classList.remove('menu', 'device'); }
 const toggleMenu = () => document.body.classList.toggle('menu');
@@ -650,7 +677,7 @@ function renderAlerts(s) {
       const meta = document.createElement('div'); meta.className = 'meta';
       const btn = document.createElement('button'); btn.className = 'tick'; btn.setAttribute('aria-label', 'On my way');
       btn.innerHTML = '<svg class="icon"><use href="#i-check"/></svg>';
-      btn.onclick = () => { if (!btn.classList.contains('sent')) { btn.classList.add('sent'); post('/api/ack', {id: a.id}); } };
+      btn.onclick = () => { if (!btn.classList.contains('sent')) { btn.classList.add('sent'); ack(a.id); } };
       body.append(msg, meta); el.append(time, body, btn);
       $('alerts').prepend(el); cards.set(a.id, el);
     }
@@ -671,21 +698,24 @@ function renderAlerts(s) {
 }
 
 function renderWard(s) {
-  const st = s.status, open = s.alerts.filter(a => a.state !== 'acked');
-  const urgent = open.some(a => a.state === 'escalated');
+  const st = s.status || {}, open = s.alerts.filter(a => a.state !== 'acked');
   $('beds').replaceChildren(...beds.map(b => {
+    const paired = b.id === 'live' || !!b.device;
     const card = document.createElement('button');
-    card.className = 'bedcard glass' + (b.id === 'live' ? '' : ' empty');
+    card.className = 'bedcard glass' + (paired ? '' : ' empty');
     card.onclick = () => go('bed', b.id);
     const name = document.createElement('div'); name.className = 'name'; name.textContent = bedLabel(b);
     const line = document.createElement('div'); line.className = 'line';
     const foot = document.createElement('div'); foot.className = 'foot';
-    if (b.id === 'live') {
-      line.textContent = !online ? 'Device offline' : st.face_ok ? 'Patient in view' : 'Patient not in view';
-      if (open.length) { const c = document.createElement('span'); c.className = 'count' + (urgent ? ' urgent' : '');
-        c.textContent = open.length + (open.length === 1 ? ' request' : ' requests') + (urgent ? ', one urgent' : ''); foot.appendChild(c); }
-      if (st && st.temp_c != null) { const t = document.createElement('span'); t.className = 'quiet'; t.textContent = st.temp_c.toFixed(1) + ' °C'; foot.appendChild(t); }
-    } else line.textContent = 'No device paired';
+    const mine = b.device ? open.filter(a => a.device_id === b.id) : open;
+    const urgent = mine.some(a => a.state === 'escalated');
+    if (b.id === 'live') line.textContent = !online ? 'Device offline' : st.face_ok ? 'Patient in view' : 'Patient not in view';
+    else if (b.device) line.textContent = (b.patient ? b.patient + ' \u00b7 ' : '') + (b.online ? 'Device online' : 'Device offline');
+    else line.textContent = 'No device paired';
+    if (paired && mine.length) { const c = document.createElement('span'); c.className = 'count' + (urgent ? ' urgent' : '');
+      c.textContent = mine.length + (mine.length === 1 ? ' request' : ' requests') + (urgent ? ', one urgent' : ''); foot.appendChild(c); }
+    const temp = b.id === 'live' ? st.temp_c : b.temp;
+    if (paired && temp != null) { const t = document.createElement('span'); t.className = 'quiet'; t.textContent = temp.toFixed(1) + ' °C'; foot.appendChild(t); }
     card.append(name, line, foot);
     return card;
   }));
@@ -709,7 +739,7 @@ function renderAnalytics(s) {
     const b = document.createElement('b'); b.textContent = n;
     r.append(l, i, b); return r;
   }));
-  $('anNote').textContent = rows.length ? 'From the last ' + day.length + ' requests kept on the device.' : 'No requests in the last day.';
+  $('anNote').textContent = rows.length ? 'From ' + day.length + ' requests in the last day' + (CENTRAL ? ', every bed.' : ', kept on the device.') : 'No requests in the last day.';
 }
 
 function render(s) {
@@ -931,10 +961,60 @@ function offline(text) {
   online = false;
   if ($('ward').classList.contains('on') && state) renderWard(state);
 }
-const es = new EventSource('/events?role=nurse');
-es.onmessage = e => { lastMessage = Date.now(); online = true; state = JSON.parse(e.data); bedName = state.bed; render(state); };
-es.onerror = () => offline('Device offline');
-setInterval(() => { if (lastMessage && Date.now() - lastMessage > 3000) offline('Device not responding'); }, 1000);
+/* Central mode: poll the API once a second (requests) and every five (devices,
+   the current bed's temperature), then draw the same views from that. */
+const central = {requests: [], devices: [], temps: {}, lastOk: 0, tick: 0};
+const toAlert = r => ({id: r.id, message: r.message, urgent: r.urgent, state: r.state, device_id: r.device_id,
+  created_at: Date.parse(r.created_at) / 1000, acked_at: r.acked_at ? Date.parse(r.acked_at) / 1000 : null});
+async function pollCentral() {
+  if (!who.token) return;
+  try {
+    const r = await fetch(CENTRAL.api + '/api/requests?limit=200', {headers: hdrs()});
+    if (r.status === 401) { who.token = null; localStorage.removeItem('rtr.token'); $('gateNote').textContent = 'The access code is no longer valid.'; go('gate'); return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    central.requests = (await r.json()).requests;
+    if (central.tick++ % 5 === 0) {
+      const d = await fetch(CENTRAL.api + '/api/devices', {headers: hdrs()});
+      if (d.ok) central.devices = (await d.json()).devices;
+      const b = beds[bedIndex];
+      if (b && b.device) {
+        const t = await fetch(CENTRAL.api + '/api/devices/' + b.id + '/sensor-readings/latest', {headers: hdrs()});
+        if (t.ok) { const reading = (await t.json()).reading; central.temps[b.id] = reading ? reading.temperature_c : null; }
+      }
+    }
+    central.lastOk = Date.now(); online = true;
+    renderCentral();
+  } catch (e) {
+    if (Date.now() - central.lastOk > 5000) { online = false; chip('conn', 'No connection', 'bad'); if ($('ward').classList.contains('on')) renderWard({alerts: []}); }
+  }
+}
+function renderCentral() {
+  if (!who.token) return;
+  beds = central.devices.map(d => ({id: d.id, name: d.bed || d.name, patient: d.display_name, online: d.online, device: true, temp: central.temps[d.id]}));
+  if (!beds.length) beds = [{id: 'none', name: 'No beds yet'}];
+  bedIndex = Math.min(bedIndex, beds.length - 1);
+  const b = beds[bedIndex], now = Date.now() / 1000;
+  const all = central.requests.map(toAlert), mine = all.filter(a => a.device_id === b.id);
+  chip('conn', online ? 'Online' : 'No connection', online ? 'good' : 'bad');
+  chip('face', b.online ? 'Device online' : 'Device offline', b.online ? 'good' : 'bad');
+  $('temp').innerHTML = b.temp == null ? 'No temperature' : b.temp.toFixed(1) + ' °C <small>' + (b.temp < 19 ? 'cool' : b.temp > 25 ? 'warm' : 'comfortable') + '</small>';
+  $('bedName').textContent = bedLabel(b); $('which').textContent = bedLabel(b);
+  $('bedLine').textContent = b.device ? (b.patient || 'Patient') + (b.online ? ', device online' : ', device offline') : 'No device paired to this bed';
+  $('body').style.display = b.device ? '' : 'none';
+  $('unpaired').style.display = b.device ? 'none' : 'grid';
+  $('frame').classList.toggle('bare', !b.device);
+  if ($('ward').classList.contains('on')) renderWard({alerts: all});
+  if ($('bed').classList.contains('on')) renderAlerts({alerts: mine, time: now});
+  if ($('analytics').classList.contains('on')) renderAnalytics({alerts: all, time: now});
+}
+if (CENTRAL) {
+  setInterval(pollCentral, 1000); pollCentral();
+} else {
+  const es = new EventSource('/events?role=nurse');
+  es.onmessage = e => { lastMessage = Date.now(); online = true; state = JSON.parse(e.data); bedName = state.bed; render(state); };
+  es.onerror = () => offline('Device offline');
+  setInterval(() => { if (lastMessage && Date.now() - lastMessage > 3000) offline('Device not responding'); }, 1000);
+}
 window.addEventListener('resize', () => { if (state) renderScene(state); });
 
 /* Start on whatever the address says, or the sign-in sheet. */

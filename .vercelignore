@@ -1,0 +1,23 @@
+# The hosted dashboard needs only the static pages and its build script.
+.git
+.venv
+.venv-yolo
+backend
+config
+data
+docs
+models
+qnx
+supabase
+tests
+tools
+weights
+dashboard/dist
+readtheroom/*.py
+readtheroom/__pycache__
+*.jpg
+*.jpeg
+*.md
+*.xml
+*.txt
+*.ini
