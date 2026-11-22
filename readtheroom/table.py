@@ -10,7 +10,9 @@ too, under the id REST, so the device knows what "looking at the screen"
 looks like and can read YES and NO beside it.
 """
 
+import itertools
 import json
+import math
 import os
 import re
 import struct
@@ -46,8 +48,23 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "spot"
 
 
+def spread_out(items: list, keep: int) -> set:
+    """Indices of the `keep` items whose closest pair is furthest apart.
+    Items are (x, y); a bird's-eye photo makes photo distance a fair stand-in
+    for the angle between two objects as seen from the bed."""
+    if len(items) <= keep:
+        return set(range(len(items)))
+    best, best_gap = None, -1.0
+    for combo in itertools.combinations(range(len(items)), keep):
+        gap = min(math.dist(items[a], items[b]) for a, b in itertools.combinations(combo, 2))
+        if gap > best_gap:
+            best, best_gap = combo, gap
+    return set(best)
+
+
 class Table:
-    def __init__(self, stem: str, needs: dict):
+    def __init__(self, stem: str, needs: dict, max_active: int = 3):
+        self.max_active = max_active   # objects calibrated in one session
         self._stem = stem                 # data/table -> table.jpg and table.json
         self.needs = needs
         self.photo: bytes | None = None
@@ -122,7 +139,19 @@ class Table:
             if item["id"] in ids:
                 raise ValueError(f"two targets called {item['label']!r}")
             ids.add(item["id"])
+            if "active" in t:
+                item["active"] = bool(t["active"])
             clean.append(item)
+        # Objects without a say get chosen: the most spread-out few are in.
+        objects = [t for t in clean if t["id"] != REST]
+        if any("active" not in t for t in objects):
+            chosen = spread_out([((t["box"][0] + t["box"][2]) / 2, (t["box"][1] + t["box"][3]) / 2) for t in objects],
+                                self.max_active)
+            for i, t in enumerate(objects):
+                t["active"] = i in chosen
+        for t in clean:
+            if t["id"] == REST:
+                t["active"] = True
         self.targets = clean
         self.version += 1
         self._save()
@@ -130,7 +159,7 @@ class Table:
     def zones(self) -> dict:
         """What the session can ask about: every target except the screen."""
         return {t["id"]: Zone(t["id"], t["label"], t["question"], t["message"], t["urgent"])
-                for t in self.targets if t["id"] != REST}
+                for t in self.targets if t["id"] != REST and t.get("active", True)}
 
     def has_screen(self) -> bool:
         return any(t["id"] == REST for t in self.targets)

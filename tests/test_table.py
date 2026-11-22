@@ -251,3 +251,24 @@ def test_a_broken_detector_still_leaves_a_photo(tmp_path):
     table = Table(str(tmp_path / "table"), load_needs(ZONES))
     assert table.set_photo(TINY_JPEG, Broken()) == []
     assert table.photo == TINY_JPEG and table.found == [] and "infer" in table.detect_error
+
+
+def test_only_the_most_spread_out_spots_are_in(tmp_path):
+    from readtheroom.table import spread_out
+    assert spread_out([(0, 0), (1, 0), (10, 0), (10, 10)], 3) == {0, 2, 3}
+    assert spread_out([(0, 0), (5, 5)], 3) == {0, 1}
+    table = Table(str(tmp_path / "table"), load_needs(ZONES))
+    table.set_photo(TINY_JPEG)
+    table.set_targets([{"id": REST, "box": [0, 1, 1, 2]},
+                       {"need": "water bottle", "box": [0, 0, 0.2, 0.2]},
+                       {"need": "cup", "box": [0.1, 0, 0.3, 0.2]},         # right next to the bottle
+                       {"need": "book", "box": [1.8, 0, 2, 0.2]},
+                       {"need": "phone", "box": [1.8, 1.8, 2, 2]}])
+    active = {t["label"] for t in table.targets if t["active"]}
+    assert active == {"screen", "water bottle", "book", "phone"} or active == {"screen", "cup", "book", "phone"}
+    assert len(table.zones()) == 3
+    # The nurse's say wins over the automatic choice.
+    table.set_targets([{"id": REST, "box": [0, 1, 1, 2]},
+                       {"need": "water bottle", "box": [0, 0, 0.2, 0.2], "active": False},
+                       {"need": "cup", "box": [0.1, 0, 0.3, 0.2], "active": True}])
+    assert list(table.zones()) == ["t:cup"]

@@ -206,7 +206,8 @@ class App:
         """The looks one session needs: screen centre, YES, NO, then each
         object on the table photo."""
         targets = control_targets(self.cfg.answer_mode)
-        targets += [(t["id"], f"Look at the {t['label']}") for t in self.table.targets if t["id"] != REST]
+        targets += [(t["id"], f"Look at the {t['label']}")
+                    for t in self.table.targets if t["id"] != REST and t.get("active", True)]
         return targets
 
     def submit_scene(self, jpeg: bytes) -> bool:
@@ -578,6 +579,7 @@ class App:
             "needs": sorted(self._needs),
             "learned": {t: self.ray.spread.get(t) for t in self.ray.points},
             "steps": len(self._table_targets()),
+            "max_active": self.table.max_active,
             "errors": self.ray.last(),
             "gaze_uv": None if self.simulate else self.ray.project(self._feature, self.table.centres()),
             "gaze_deg": None if self.simulate else self.ray.gaze_angles(self._feature, self.ray.points.get(REST)),

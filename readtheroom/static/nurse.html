@@ -164,7 +164,11 @@
   @keyframes breathe { 0%, 100% { box-shadow: 0 0 0 3px rgba(228, 169, 192, .5); } 50% { box-shadow: 0 0 0 9px rgba(228, 169, 192, .15); } }
   #stage.adding { pointer-events: auto; cursor: crosshair; }
   body.adding #camTip { color: var(--accent-deep); font-weight: 600; }
-  .trow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+  .trow { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+  .trow input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+  .trow.out input[type=text], .trow.out select { opacity: .5; }
+  .spot.out { border-style: dotted; border-color: rgba(255, 255, 255, .5); box-shadow: none; }
+  .spot.out .label { opacity: .55; }
   .trow input, .trow select { font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 10px; border: 0; background: var(--plate); box-shadow: 0 0 0 1px var(--edge); min-width: 0; color: var(--ink); }
   .trow .teach { white-space: nowrap; }
   .trow .teach.done { background: var(--accent); color: #fff; box-shadow: none; }
@@ -572,7 +576,7 @@ function renderTable(s) {
   const live = new Set();
   tb.targets.forEach(t => {
     const learned = t.id in tb.learned;
-    const cls = t.id === tb.teaching ? 'calib' : t.id === asked ? 'asked' : t.id === looking ? 'looking' : learned ? 'learned' : 'other';
+    const cls = t.id === tb.teaching ? 'calib' : t.active === false ? 'out' : t.id === asked ? 'asked' : t.id === looking ? 'looking' : learned ? 'learned' : 'other';
     live.add('t:' + t.id);
     place('t:' + t.id, t.box, tb.size, t.label + (learned ? ' \u2713' : ''), cls, t.id === looking ? ses.progress : 0);
   });
@@ -825,7 +829,7 @@ function renderTableSheet(s) {
   const key = tb.photo_id + ':' + JSON.stringify(tb.targets);
   if (draft === null || draftKey !== key) {
     draftKey = key;
-    draft = tb.targets.length ? tb.targets.map(t => ({id: t.id, label: t.label, need: t.id === 'rest' ? 'rest' : t.need, box: t.box}))
+    draft = tb.targets.length ? tb.targets.map(t => ({id: t.id, label: t.label, need: t.id === 'rest' ? 'rest' : t.need, box: t.box, active: t.active !== false}))
       : suggestionsFrom(tb);
     buildRows(tb);
   }
@@ -834,7 +838,7 @@ function renderTableSheet(s) {
   $('tableTag').className = 'tag ' + (tb.ready ? 'good' : '');
   $('tableNote').textContent = !tb.photo_id ? (tb.camera ? 'Waiting for the table camera\u2019s first picture.' : 'Photograph the table from where the patient sits, with the screen in the picture.')
     : !tb.targets.length ? (tb.found.length ? 'Check the spots the detector found, then save.' : (tb.detect_error ? 'The detector cannot run on this device. ' : 'Nothing recognised. ') + 'Add spots with "Add a spot" and a tap on the photo, the screen first.')
-    : 'Press Calibrate under Patient camera to do every look in one go, or Teach one spot again here.';
+    : 'Ticked spots are in this session (the ' + tb.max_active + ' furthest apart are ticked by themselves; fewer, further apart, reads best). Press Calibrate under Patient camera.';
   $('snapBtn').style.display = st.simulate ? 'none' : '';
   $('snapBtn').textContent = tb.camera ? (tb.photo_id ? 'Photograph the table again' : 'Photograph the table') : 'Use the patient camera';
   draft.forEach((t, i) => {
@@ -859,8 +863,11 @@ function suggestionsFrom(tb) {
 }
 function buildRows(tb) {
   $('targetRows').replaceChildren(...draft.map((t, i) => {
-    const row = document.createElement('div'); row.className = 'trow';
-    const label = document.createElement('input'); label.value = t.label; label.placeholder = 'Name'; label.oninput = () => { t.label = label.value; };
+    const row = document.createElement('div'); row.className = 'trow' + (t.active === false ? ' out' : '');
+    const on = document.createElement('input'); on.type = 'checkbox'; on.checked = t.active !== false; on.title = 'In this session';
+    if (t.need === 'rest') { on.checked = true; on.disabled = true; }
+    on.onchange = () => { t.active = on.checked; row.classList.toggle('out', !on.checked); };
+    const label = document.createElement('input'); label.type = 'text'; label.value = t.label; label.placeholder = 'Name'; label.oninput = () => { t.label = label.value; };
     const need = document.createElement('select');
     [['rest', 'the screen']].concat(tb.needs.map(n => [n, n])).forEach(([v, text]) => { const o = document.createElement('option'); o.value = v; o.textContent = text; need.appendChild(o); });
     need.value = t.need; need.onchange = () => { t.need = need.value; };
@@ -868,11 +875,11 @@ function buildRows(tb) {
     teach.onclick = () => post('/api/teach', {target: t.id});
     const x = document.createElement('button'); x.className = 'ghost x'; x.innerHTML = '<svg class="icon"><use href="#i-x"/></svg>'; x.setAttribute('aria-label', 'Remove');
     x.onclick = () => { draft.splice(i, 1); buildRows(tb); };
-    row.append(label, need, teach, x); return row;
+    row.append(on, label, need, teach, x); return row;
   }));
 }
 async function saveTargets() {
-  const targets = draft.map(t => t.need === 'rest' ? {id: 'rest', box: t.box} : {need: t.need, label: t.label || t.need, box: t.box});
+  const targets = draft.map(t => t.need === 'rest' ? {id: 'rest', box: t.box} : {need: t.need, label: t.label || t.need, box: t.box, active: t.active !== false});
   const r = await post('/api/table/targets', {targets});
   if (!r.ok) $('teachHelp').textContent = 'Could not save the spots: ' + ((await r.json()).error || r.status);
 }
@@ -897,7 +904,7 @@ $('stage').addEventListener('click', e => {
   const r = $('stage').getBoundingClientRect(), [w, h] = state.table.size;
   const u = (e.clientX - r.left) / r.width, v = (e.clientY - r.top) / r.height;
   const box = [Math.max(0, (u - .06) * w), Math.max(0, (v - .08) * h), Math.min(w, (u + .06) * w), Math.min(h, (v + .08) * h)];
-  draft.push({id: null, label: 'spot', need: state.table.needs[0] || 'rest', box});
+  draft.push({id: null, label: 'spot', need: state.table.needs[0] || 'rest', box, active: true});
   adding = false; document.body.classList.remove('adding'); $('stage').classList.remove('adding'); $('camTip').textContent = 'Tap the small picture to swap';
   saveTargets().then(() => { document.body.classList.add('device'); });
 });
