@@ -74,14 +74,9 @@ class Table:
         return self.suggestions()
 
     def _detect(self, jpeg: bytes, detector) -> list:
-        import numpy as np
-        cv2 = detector._cv2
-        frame = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
-        if frame is None:
-            return []
         return [{"label": d["label"], "score": round(float(d["score"]), 3),
                  "box": [round(float(v), 1) for v in d["box"]]}
-                for d in detector.detect(frame)]
+                for d in detector.detect_jpeg(jpeg)]
 
     def suggestions(self) -> list:
         """Targets the detector proposes: every known need it saw, plus the

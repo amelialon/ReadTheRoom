@@ -71,6 +71,10 @@ class SceneDetector:
         canvas[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = resized
         return canvas, scale, pad_x, pad_y
 
+    def detect_jpeg(self, jpeg: bytes) -> list:
+        frame = self._cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), self._cv2.IMREAD_COLOR)
+        return [] if frame is None else self.detect(frame)
+
     def detect(self, frame_bgr) -> list:
         """[{'label', 'score', 'box': [x1, y1, x2, y2]}] in frame pixels, best first."""
         h, w = frame_bgr.shape[:2]

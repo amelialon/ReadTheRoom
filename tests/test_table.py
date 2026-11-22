@@ -164,3 +164,50 @@ def test_teach_frames_are_saved_and_tunable(table_app, tmp_path, capsys):
     tune_ray.main(files)
     out = capsys.readouterr().out
     assert "Recommended Config values" in out and "fair test" in out
+
+
+class _FakeTableCamera:
+    def __init__(self, jpeg=None):
+        self.jpeg = jpeg
+
+    def snapshot_jpeg(self):
+        return self.jpeg
+
+
+class _FakeDetector:
+    def detect_jpeg(self, jpeg):
+        return [{"label": "laptop", "score": 0.9, "box": [0, 1, 1, 2]},
+                {"label": "water bottle", "score": 0.6, "box": [0, 0, 1, 1]},
+                {"label": "cat", "score": 0.5, "box": [1, 0, 2, 1]}]
+
+
+def test_table_camera_photographs_and_populates_by_itself(tmp_path):
+    from readtheroom.main import App
+    from readtheroom.server import Hub
+    extractor = _FakeExtractor()
+    camera = _FakeTableCamera()          # no frame yet
+    app = App(Config(ema_alpha=1.0, gaze_mode="table"), load_zones(ZONES), str(tmp_path), Hub(),
+              _FakeCamera(), extractor, menu=load_menu(ZONES), needs=load_needs(ZONES),
+              detector=_FakeDetector(), table_source=camera)
+    clock = Clock()
+    for _ in range(60):                  # three seconds: it tries, finds no frame, waits
+        clock.t += 0.05
+        app.tick(clock.t)
+    assert app.table.photo is None
+    camera.jpeg = TINY_JPEG
+    for _ in range(120):
+        clock.t += 0.05
+        app.tick(clock.t)
+    assert app.table.photo == TINY_JPEG
+    assert [t["id"] for t in app.table.targets] == [REST, "t:water-bottle"]   # the cat has no question
+    assert set(app.session.zones) == {"t:water-bottle"}
+    assert app.hub._state["table"]["camera"] is True
+    # Retaking the photo forgets the looks and repopulates.
+    app.request_teach(REST)
+    for _ in range(60):
+        extractor.feature = frame([0, 0, -50], 0, 0, SCREEN, app.ray)
+        clock.t += 0.05
+        app.tick(clock.t)
+    assert REST in app.ray.points
+    app.snap_table_photo()
+    assert app.ray.points == {} and [t["id"] for t in app.table.targets] == [REST, "t:water-bottle"]

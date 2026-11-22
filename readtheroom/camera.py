@@ -52,6 +52,16 @@ class OpenCVCamera:
             self._fresh = False
             return self._frame
 
+    def snapshot_jpeg(self, quality: int = 85):
+        """The newest frame as JPEG bytes, new or not; None before the first."""
+        import cv2
+        with self._lock:
+            frame = self._frame
+        if frame is None:
+            return None
+        ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        return jpeg.tobytes() if ok else None
+
 
 class FileFrameSource:
     """Reads the newest JPEG written to a fixed path by a separate capture

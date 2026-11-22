@@ -23,7 +23,7 @@ from .zones import ZoneClassifier
 class App:
     def __init__(self, cfg: Config, zones: dict, data_dir: str, hub: Hub,
                  source=None, extractor=None, sensor=None, simulate: bool = False,
-                 scene=None, menu=(), needs=None, detector=None):
+                 scene=None, menu=(), needs=None, detector=None, table_source=None):
         self.cfg = cfg
         self.zones = zones
         self.hub = hub
@@ -75,6 +75,8 @@ class App:
             self._ray_path = os.path.join(data_dir, "ray.json")
             self.table = Table(os.path.join(data_dir, "table"), needs or {})
             self.detector = detector
+            self.table_source = table_source   # the camera over the table, if any
+            self._table_shot_after = None       # when to take the first photo by itself
             self._needs = needs or {}
             self._want_teach: str | None = None
             self._teaching: str | None = None
@@ -125,6 +127,8 @@ class App:
         suggested = self.table.set_photo(jpeg, self.detector)
         self.ray.forget()
         self.self_check = {}
+        if suggested:  # the spots appear by themselves; the nurse can still edit them
+            self.table.set_targets(suggested)
         self._table_dirty = True
         return {"found": self.table.found, "suggested": suggested}
 
@@ -164,6 +168,11 @@ class App:
         nurse turns the camera to the table for a moment."""
         if not self.table_mode or self.simulate:
             raise ValueError("no camera to photograph with")
+        if self.table_source is not None:
+            jpeg = self.table_source.snapshot_jpeg()
+            if jpeg is None:
+                raise ValueError("no picture from the table camera yet")
+            return self.set_table_photo(jpeg)
         frame = self._frame
         if frame is None:
             raise ValueError("no picture from the camera yet")
@@ -451,6 +460,18 @@ class App:
             if self._table_dirty:
                 self._table_dirty = False
                 self._apply_table()
+            if self.table_source is not None and self.table.photo is None:
+                # First run with a table camera: photograph the table by
+                # itself once the camera has had a moment to settle.
+                if self._table_shot_after is None:
+                    self._table_shot_after = now + 2.0
+                elif now >= self._table_shot_after:
+                    self._table_shot_after = now + 5.0  # try again if there was no frame yet
+                    try:
+                        self.snap_table_photo()
+                        print("Photographed the table.", flush=True)
+                    except ValueError:
+                        pass
             if self._want_teach and not self.calibrator.active:
                 target, self._want_teach = self._want_teach, None
                 label = next((t["label"] for t in self.table.targets if t["id"] == target), target)
@@ -545,6 +566,7 @@ class App:
             "gaze_deg": None if self.simulate else self.ray.gaze_angles(self._feature, self.ray.points.get(REST)),
             "teaching": self._teaching,
             "ready": ready,
+            "camera": self.table_source is not None,
         })
         return snap
 
@@ -625,7 +647,9 @@ def main() -> None:
     p = argparse.ArgumentParser(prog="readtheroom")
     p.add_argument("--simulate", action="store_true",
                    help="no camera: drive gaze from the nurse page's test buttons")
-    p.add_argument("--camera", type=int, default=0, help="OpenCV camera index")
+    p.add_argument("--camera", type=int, default=0, help="OpenCV camera index of the camera that sees the patient's face")
+    p.add_argument("--table-camera", type=int, help="index of a second camera looking at the table; "
+                   "its picture becomes the table photo by itself, and 'Photograph the table' retakes it")
     p.add_argument("--frame-file", help="read frames from a JPEG written by a capture process")
     p.add_argument("--model", default=os.path.join(root, "models", "face_landmarker.task"))
     p.add_argument("--gaze-mode", choices=("table", "quick", "trained"), default="table",
@@ -650,7 +674,7 @@ def main() -> None:
         gaze_mode = "trained"
     cfg = Config(bed=args.bed, answer_mode=args.answer_mode, gaze_mode=gaze_mode)
     zones = load_zones(args.zones)
-    source = extractor = sensor = None
+    source = extractor = sensor = table_source = None
     if not args.simulate:
         from .camera import FileFrameSource, OpenCVCamera
         from .features import FaceFeatureExtractor
@@ -660,6 +684,10 @@ def main() -> None:
             raise SystemExit(f"Face model not found at {args.model}. See README.")
         extractor = FaceFeatureExtractor(args.model, cfg.blink_threshold)
         source = FileFrameSource(args.frame_file) if args.frame_file else OpenCVCamera(args.camera)
+        if args.table_camera is not None:
+            if args.table_camera == args.camera:
+                raise SystemExit("--table-camera must be a different camera from --camera")
+            table_source = OpenCVCamera(args.table_camera, 1280, 720)  # one photo: detail over rate
         sensor = open_sensor()
 
     needs = load_needs(args.zones)
@@ -672,7 +700,7 @@ def main() -> None:
         scene = _open_scene(args.scene_model, zones, needs, quick)
     hub = Hub()
     app = App(cfg, zones, args.data_dir, hub, source, extractor, sensor, args.simulate, scene,
-              load_menu(args.zones), needs=needs, detector=detector)
+              load_menu(args.zones), needs=needs, detector=detector, table_source=table_source)
     serve(hub, app, args.host, args.port)
     print(f"Patient screen: http://localhost:{args.port}/")
     print(f"Nurse station:  http://localhost:{args.port}/nurse")
