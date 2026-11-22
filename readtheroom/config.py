@@ -54,13 +54,14 @@ class Config:
     dir_head_v_weight: float = 0.0
     # Table mode: the gaze is cast as a ray from the head through the eyes
     # (see gazeray.py); each object is a point learned from one look.
-    ray_eye_gain: float = 0.75      # radians per unit of the eye scores
-    ray_eye_clamp: float = 0.3      # the eye scores saturate past this
-    ray_iris_gain: float = 2.5      # radians per eye-width of iris travel
+    # Gains measured on the demo laptop and camera with tune_ray (Nov 21).
+    ray_eye_gain: float = 1.12      # radians per unit of the eye scores
+    ray_eye_clamp: float = 0.45     # the eye scores saturate past this
+    ray_iris_gain: float = 3.75     # radians per eye-width of iris travel
     ray_distance_cm: float = 70.0   # how far the objects are assumed to be
     ray_accept_deg: float = 9.0     # a look counts within this of a target
     ray_margin_deg: float = 2.0     # and this much closer than the runner-up
-    ray_answer_deg: float = 7.0     # left/right of the screen for YES/NO
+    ray_screen_deg: float = 14.0    # this close to the screen line counts as "on the screen"
     teach_settle_s: float = 0.8
     teach_record_s: float = 1.6
     greet_settle_s: float = 0.8

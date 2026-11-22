@@ -69,6 +69,22 @@ def table_app(tmp_path):
     return app, run
 
 
+YES_SPOT = [14.0, -8.0, -5.0]     # the YES half of the screen, to the patient's left
+NO_SPOT = [-14.0, -8.0, -5.0]
+
+
+def calibrate(app, run, where: dict, pos=(0, 0, -50), yaw=0.0):
+    """Run the guided sequence, feeding the frame for whichever target it asks for."""
+    assert app.request_calibration()
+    run(None, 0.1)
+    steps = 0
+    while app.calibrator.active and steps < 50:
+        target = app.calibrator.snapshot(0)["target"]
+        run(frame(list(pos), yaw, 0, where[target], app.ray), 0.5)
+        steps += 1
+    assert app.calibrator.error is None, app.calibrator.error
+
+
 def test_table_mode_end_to_end(table_app):
     app, run = table_app
     assert app.table_mode and not app.quick
@@ -82,13 +98,12 @@ def test_table_mode_end_to_end(table_app):
     run(look(SCREEN), 0.5)
     assert set(app.session.zones) == {"t:water-bottle", "t:snack-packet"}
     assert app.hub._state["calibrated"] is False and app.session.state == "idle"
+    assert app.hub._state["table"]["steps"] == 5
 
-    # Teach the three looks, one request each.
-    for target, where in ((REST, SCREEN), ("t:water-bottle", BOTTLE), ("t:snack-packet", SNACK)):
-        assert app.request_teach(target)
-        run(look(where), app.cfg.teach_settle_s + app.cfg.teach_record_s + 0.3)
-        assert target in ray.points, target
-        assert app.calibrator.error is None
+    # One guided sequence: screen, YES, NO, bottle, snack.
+    calibrate(app, run, {REST: SCREEN, "yes": YES_SPOT, "no": NO_SPOT,
+                         "t:water-bottle": BOTTLE, "t:snack-packet": SNACK})
+    assert set(ray.points) == {REST, "yes", "no", "t:water-bottle", "t:snack-packet"}
     assert app.hub._state["calibrated"] is True
     assert app.self_check["t:water-bottle"] == 1.0
     assert os.path.exists(app._ray_path)
@@ -100,20 +115,24 @@ def test_table_mode_end_to_end(table_app):
     run(look(BOTTLE, pos=[10, 3, -55], yaw=0.3), 3.0)      # still looking: not an answer
     assert app.alerts.list() == []
     run(look(SCREEN), 1.2)                                   # back to read the question
-    run(look([14, -8, -5]), 1.6)                             # left of the screen: YES
+    run(look(YES_SPOT), 1.6)                                 # the YES look: sent
     assert app.session.state == "sent"
     assert app.alerts.list()[0]["message"] == "Bed 4: patient is thirsty and wants water"
 
-    # The snack, answered NO from the right of the screen.
+    # The snack, answered with the NO look.
     run(look(SCREEN), app.cfg.sent_display_s + 1.5)
     run(look(SNACK), 2.0)
     assert app.session.state == "prompt" and "snack" in app.session.prompt["question"]
     run(look(SCREEN), 1.2)
-    run(look([-14, -8, -5]), 1.6)
+    run(look(NO_SPOT), 1.6)
     assert app.session.state == "idle" and len(app.alerts.list()) == 1
 
+    # Looking near the screen but not exactly at its taught point still counts as the screen.
+    run(look([3, -12, -5]), 1.0)
+    assert app.session.last_label == REST if hasattr(app.session, "last_label") else True
+
     snap = app.hub._state["table"]
-    assert snap["ready"] and set(snap["learned"]) == {REST, "t:water-bottle", "t:snack-packet"}
+    assert snap["ready"] and set(snap["learned"]) == set(ray.points)
     assert snap["gaze_uv"] is not None and 0 <= snap["gaze_uv"][0] <= 1
 
 

@@ -199,6 +199,13 @@ class App:
         self._want_calibration = True
         return True
 
+    def _table_targets(self) -> list:
+        """The looks one session needs: screen centre, YES, NO, then each
+        object on the table photo."""
+        targets = control_targets(self.cfg.answer_mode)
+        targets += [(t["id"], f"Look at the {t['label']}") for t in self.table.targets if t["id"] != REST]
+        return targets
+
     def submit_scene(self, jpeg: bytes) -> bool:
         if self.scene is None:
             return False
@@ -307,25 +314,22 @@ class App:
             self._q_state, self._q_centred = state, False
         if feature is None:
             return None
+        if label is None:
+            # The screen is wide and close: near its line counts as on it.
+            off = self.ray.offset_from(REST, feature)
+            if off is not None and abs(off[0]) < self.cfg.ray_screen_deg and abs(off[1]) < self.cfg.ray_screen_deg:
+                label = REST
         if label == REST:
             self._q_centred = True
             return REST
         if not self._q_centred:
             return None
-        off = self.ray.offset_from(REST, feature)  # (left, up) in degrees from the screen
-        answer = self.cfg.ray_answer_deg
         if state == "idle":
-            if label is not None and label in self.session.zones:
+            if label in self.session.zones:
                 return label
-            # A look well above the screen, at nothing learned, opens the menu.
-            if off is not None and off[1] >= 2 * answer and abs(off[0]) < 2 * answer:
-                return NO
-            return None
-        if state in ("prompt", "menu") and off is not None:
-            if off[0] >= answer:
-                return YES
-            if off[0] <= -answer:
-                return NO
+            return NO if label == NO else None   # NO is MORE while nothing is asked
+        if state in ("prompt", "menu"):
+            return label if label in (YES, NO) else None
         return None
 
     def _perceive_quick(self, now: float, feature):
@@ -410,21 +414,26 @@ class App:
     def _finish_calibration(self, now: float) -> None:
         self.session.reset(now)
         if self.table_mode:
-            target, self._teaching = self._teaching, None
-            if self.calibrator.error or target is None:
+            self._teaching = None
+            if self.calibrator.error:
                 return
+            cal = self.calibrator
+            looks: dict = {}
+            for frame, target in zip(cal.X, cal.y):
+                looks.setdefault(target, []).append(frame)
             try:
-                frames = self.calibrator.X
-                distance = None
-                if target == REST:
-                    # The screen is by the camera, so it is as far as the head is.
-                    origins = [r[0] for r in (self.ray.ray(f) for f in frames) if r is not None]
-                    if origins:
-                        distance = float(sum(float((o ** 2).sum()) ** 0.5 for o in origins) / len(origins))
-                self.ray.learn(target, frames, distance)
-                self.self_check[target] = self.ray.self_check({target: frames})[target]
+                for target, frames in looks.items():
+                    distance = None
+                    if target in (REST, YES, NO):
+                        # On the screen, which is by the camera: as far as the head is.
+                        origins = [r[0] for r in (self.ray.ray(f) for f in frames) if r is not None]
+                        if origins:
+                            distance = float(sum(float((o ** 2).sum()) ** 0.5 for o in origins) / len(origins))
+                    self.ray.learn(target, frames, distance)
+                    self._save_teach(target, frames)
+                for target, frames in looks.items():
+                    self.self_check[target] = self.ray.self_check({target: frames})[target]
                 self.ray.save(self._ray_path)
-                self._save_teach(target, frames)
             except (ValueError, OSError) as exc:
                 self.calibrator.error = f"Could not learn that look: {exc}"
             return
@@ -455,6 +464,10 @@ class App:
         started = time.monotonic()
         if self._want_calibration:
             self._want_calibration = False
+            if self.table_mode:
+                self.calibrator = Calibrator(self._table_targets(), self.cfg.teach_settle_s,
+                                             self.cfg.teach_record_s, passes=1)
+                self._teaching = "all"
             self.calibrator.start(now)
         if self.table_mode:
             if self._table_dirty:
@@ -489,7 +502,7 @@ class App:
         label, face = self._perceive(now)
         self._last = (label, face)
         if self.table_mode:
-            ready = self.simulate or (REST in self.ray.points
+            ready = self.simulate or (all(t in self.ray.points for t in (REST, YES, NO))
                                       and any(z in self.ray.points for z in self.session.zones))
         else:
             ready = self.simulate or (self.reader.centre is not None if self.quick
@@ -561,6 +574,7 @@ class App:
         snap.update({
             "needs": sorted(self._needs),
             "learned": {t: self.ray.spread.get(t) for t in self.ray.points},
+            "steps": len(self._table_targets()),
             "errors": self.ray.last(),
             "gaze_uv": None if self.simulate else self.ray.project(self._feature, self.table.centres()),
             "gaze_deg": None if self.simulate else self.ray.gaze_angles(self._feature, self.ray.points.get(REST)),

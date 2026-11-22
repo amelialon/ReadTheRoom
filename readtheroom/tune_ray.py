@@ -49,7 +49,7 @@ def evaluate(looks: dict, cfg: Config, scale: float) -> tuple:
     for target, series in looks.items():
         frames = series[0]["frames"]
         distance = None
-        if target == "rest":
+        if target in ("rest", "yes", "no"):
             origins = [r[0] for r in (ray.ray(f) for f in frames) if r is not None]
             if origins:
                 distance = float(np.mean([np.linalg.norm(o) for o in origins]))
@@ -81,8 +81,9 @@ def main(argv=None) -> None:
     if not looks:
         sys.exit("no taught looks in those files")
     print(f"Spots: {', '.join(looks)}; looks: {sum(len(v) for v in looks.values())}")
-    if "rest" not in looks:
-        print("The screen was not taught, so YES/NO cannot be checked.")
+    for t in ("rest", "yes", "no"):
+        if t not in looks:
+            print(f"'{t}' was not calibrated; the device will not be ready without it.")
     repeats = sum(len(v) > 1 for v in looks.values())
     if not repeats:
         print("Every spot was taught once. Teach each a second time from another posture "
