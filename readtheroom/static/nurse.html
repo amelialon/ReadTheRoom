@@ -755,7 +755,7 @@ function render(s) {
   chip('calState', calText, s.calibrated && !cal.active ? 'good' : '');
   $('check').textContent = cal.active ? 'Calibrating: step ' + cal.step + ' of ' + cal.steps
     : cal.error ? cal.error
-    : s.table ? (st.simulate ? 'Simulation: press a spot below to stand in for a look.' : s.calibrated ? 'Calibrated. Do it again at the start of every session, or when the laptop or the patient has moved.' : 'Not calibrated. Press Calibrate under the room view: the patient looks at the screen centre, YES, NO, then each object, a second and a half each.')
+    : s.table ? (st.simulate ? 'Simulation: press a spot below to stand in for a look.' : s.calibrated ? 'Calibrated. Do it again at the start of every session, or when the laptop or the patient has moved.' : 'Not calibrated. Press Calibrate under the room view: the patient looks at the screen centre, YES, NO, then each object, two seconds each.')
     : st.simulate ? 'Simulation mode: calibration is not needed.'
     : st.gaze_mode === 'quick' ? (s.calibrated ? 'The device learned the centre from one look at the screen and keeps it up to date.' : 'Waiting for the patient to look at the screen.')
     : !s.calibrated ? 'Not calibrated.'
